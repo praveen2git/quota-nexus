@@ -4,3 +4,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # init and analyze must move together, so one PR for all actions.
+    groups:
+      actions:
+        patterns:
+          - '*'

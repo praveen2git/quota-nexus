@@ -96,4 +96,10 @@ test('parseGeneratorMetadata maps model id to label and computes fill', () => {
     assert.strictEqual(c.title, 'Fix bug');
     assert.strictEqual(c.timestamp, 5);
     assert.strictEqual(p.parseGeneratorMetadata({ generatorMetadata: [] }, {}, null), null);
+
+    const meta = model => ({ generatorMetadata: [{ responseModel: model, chatModel: { usage: { inputTokens: '10' } } }] });
+    const labels = { M1: 'Gemini 3.8 Flash (High)', M2: 'Claude Sonnet 4.6 (Thinking)' };
+    assert.strictEqual(p.parseGeneratorMetadata(meta('gemini-3.8-flash-n'), labels, null).model, 'Gemini 3.8 Flash');
+    assert.strictEqual(p.parseGeneratorMetadata(meta('gemini-9-ultra'), labels, null).model, 'Gemini 9 Ultra');
+    assert.strictEqual(p.parseGeneratorMetadata(meta('MODEL_PLACEHOLDER_M9'), labels, null).model, 'Unknown model');
 });

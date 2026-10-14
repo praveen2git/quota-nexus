@@ -158,11 +158,17 @@ function pickTrajectory(summaries, wsPaths) {
     return best;
 }
 
+// gemini-3.8-flash-n -> "Gemini 3.8 Flash": match a known label, else title-case the id.
 function prettyModel(raw, modelLabels) {
-    if (!raw) return 'Unknown model';
+    if (!raw || typeof raw !== 'string') return 'Unknown model';
     if (modelLabels && modelLabels[raw]) return modelLabels[raw];
-    const s = String(raw).replace(/^models[/_-]/i, '');
-    return /^MODEL_PLACEHOLDER_/i.test(s) ? 'Unknown model' : s;
+    const s = raw.replace(/^models[/_-]/i, '').replace(/-n$/i, '');
+    if (/^MODEL_PLACEHOLDER_/i.test(s)) return 'Unknown model';
+    const words = s.toLowerCase().split(/[-_\s]+/).filter(Boolean).join(' ');
+    const base = l => l.replace(/\s*\(.*?\)\s*/g, ' ').trim();
+    const hit = Object.values(modelLabels || {}).map(base).find(l => l.toLowerCase() === words);
+    if (hit) return hit;
+    return words.replace(/\b[a-z]/g, c => c.toUpperCase()).slice(0, 100);
 }
 
 function parseGeneratorMetadata(data, modelLabels, picked) {
