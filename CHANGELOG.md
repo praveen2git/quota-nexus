@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.2.5] - 2026-10-14
+
+### Added
+- `quotaNexus.antigravity.enable`: turn Antigravity tracking off. Quota Nexus then stops looking for the Antigravity server, and its card, hover section, other accounts and alerts go away.
+- `quotaNexus.antigravity.showInStatusBar`: hide Antigravity quota from the status bar but keep it in the hover and dashboard.
+- **Toggle Used / Left** command. The "Show used instead" link in the hover now switches in one click instead of opening Settings.
+
+- **Settings in the dashboard.** The gear opens every setting right in the panel, grouped like VS Code Settings, with readable labels. A tool's switches grey out while that tool is off. The title-bar gear opens it too (**Quota Nexus: Quick Settings**).
+
+### Fixed
+- **Claude Code limits no longer get rate-limited (HTTP 429).** Windows and reloads now share one result instead of each asking. After a 429, Nexus waits 5, 10, 20, then up to 30 minutes (or what Anthropic's `Retry-After` asks). Changing settings no longer forces a request, and the Refresh button asks at most once a minute.
+- While limits cannot be fetched, the last values stay on screen, marked with their age.
+
+### Changed
+- **One row of dashboard icons.** The dashboard's own header (name, bell, eye, refresh, gear) is gone; those actions now sit once in the view's title bar. The bell and eye change to show when alerts are snoozed or emails are masked. Switch account, Toggle Used / Left, Diagnostics and All Settings are in the "..." menu.
+- **Settings are grouped** into General, Status Bar, Alerts, Antigravity, Claude Code and Codex. Each tool has the same switches in the same order: Enable, Show In Status Bar, Show Context Window.
+- Dropdowns show readable labels (for example "1 minute" instead of `60000`).
+- Renamed for consistency: `claudeCode.showInNavBar` and `codex.showInNavBar` are now `showInStatusBar`, and `contextWindow.showAntigravity` is now `antigravity.showContextWindow`. Values you set move over automatically on first start.
+
 ## [1.2.4] - 2026-10-14
 
 ### Fixed

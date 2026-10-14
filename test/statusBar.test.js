@@ -56,7 +56,7 @@ test('left mode shows percent LEFT for every tool', () => {
     assert.match(items[0].tooltip.value, /\| 70% \(30% used\) \|/);
     assert.match(items[0].tooltip.value, /\| 22% \(78% used\) \|/);
     assert.match(items[0].tooltip.value, /Percentages show what is left \(↓\)/);
-    assert.match(items[0].tooltip.value, /\[Show used instead\]\(command:workbench\.action\.openSettings\?/);
+    assert.match(items[0].tooltip.value, /\[Show used instead\]\(command:quotaNexus\.togglePercentMode\)/);
     bar.update(view(false, 'left'), { ...OPT, format: 'compact' });
     assert.strictEqual(items[0].text, '$(dashboard) AG: Gem 100%↓ · Cl/GPT 22%↓ | CC: 70%↓ · wk 50%↓ | CX: ~100%↓');
 });
@@ -128,4 +128,13 @@ test('while Antigravity is still being found, say so instead of "not detected"',
     assert.match(items[0].text, /^\$\(dashboard\) CC /, 'Claude shows without waiting');
     bar.update({ ...view(false), active: null, connecting: true, claude: { windows: [], context: null }, codex: { windows: [], context: null, idle: false } }, { ...OPT, format: 'minimal' });
     assert.strictEqual(items[0].text, '$(sync~spin) Quota Nexus');
+});
+
+test('Antigravity can be hidden from the status bar or turned off', () => {
+    const { bar, items } = loadStatusBar();
+    bar.update(view(false), { ...OPT, format: 'minimal', showAgUsage: false });
+    assert.strictEqual(items[0].text, '$(dashboard) CC 30%↑ · wk 50%↑ | CX ~0%↑');
+    assert.match(items[0].tooltip.value, /### Antigravity quota/, 'still in the hover');
+    bar.update({ ...view(false), active: null, antigravityEnabled: false }, { ...OPT, format: 'minimal' });
+    assert.doesNotMatch(items[0].tooltip.value, /Antigravity/, 'turned off: no "not detected" note');
 });

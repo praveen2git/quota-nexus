@@ -140,6 +140,13 @@ class ClaudeContextReader {
     }
 }
 
+// Retry-After is seconds or an HTTP date; capped at 1 hour.
+function retryAfterMs(h, now = Date.now()) {
+    if (typeof h !== 'string' || !h.trim()) return 0;
+    const ms = /^\d+$/.test(h.trim()) ? Number(h) * 1000 : Date.parse(h) - now;
+    return isFinite(ms) && ms > 0 ? Math.min(ms, 3600e3) : 0;
+}
+
 function getJson(url, headers, timeout = 8000) {
     return new Promise((resolve) => {
         const req = https.request(url, {
@@ -157,7 +164,7 @@ function getJson(url, headers, timeout = 8000) {
             res.on('end', () => {
                 let json = null;
                 try { json = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch (e) { /* non-JSON body */ }
-                resolve({ status: res.statusCode, data: json });
+                resolve({ status: res.statusCode, data: json, retryAfterMs: retryAfterMs(res.headers['retry-after']) });
             });
         });
         req.on('error', () => resolve({ status: 0, data: null }));
@@ -166,26 +173,46 @@ function getJson(url, headers, timeout = 8000) {
     });
 }
 
+const USAGE_FORCE_GAP_MS = 60e3;
+const USAGE_BACKOFF_MAX_MS = 30 * 60e3;
+
+// Schedule is shared by every window: one request per gap, doubling the wait after each failure.
+function usageDue(shared, now, gapMs, force) {
+    const s = shared || {};
+    if (now < (s.until || 0)) return false;
+    return now - (s.at || 0) >= (force ? USAGE_FORCE_GAP_MS : gapMs);
+}
+
+function usageResult(shared, r, now, gapMs) {
+    const s = shared || {};
+    if (!r.error) return { at: now, data: r, fails: 0, until: 0, error: '' };
+    if (r.noRequest) return { ...s, error: r.error };
+    const fails = (s.fails || 0) + 1;
+    const wait = Math.max(r.retryAfterMs || 0, Math.min(USAGE_BACKOFF_MAX_MS, gapMs * 2 ** (fails - 1)));
+    return { ...s, at: now, fails, until: now + wait, error: r.error };
+}
+
 // Opt-in. Read-only: never refreshes or rewrites the Claude Code token file.
 async function fetchClaudeUsage(home) {
     let creds;
     try {
         creds = JSON.parse(await fsp.readFile(path.join(home, '.claude', '.credentials.json'), 'utf8'));
     } catch (e) {
-        return { error: 'Claude Code sign-in file not found' };
+        return { error: 'Claude Code sign-in file not found', noRequest: true };
     }
     const o = creds && creds.claudeAiOauth;
     if (!o || typeof o.accessToken !== 'string' || !/^[\x21-\x7e]{10,4096}$/.test(o.accessToken)) {
-        return { error: 'Claude Code is not signed in' };
+        return { error: 'Claude Code is not signed in', noRequest: true };
     }
     if (o.expiresAt && Date.now() >= o.expiresAt - 60000) {
-        return { error: 'Token expired - run Claude Code once to renew it' };
+        return { error: 'Token expired - run Claude Code once to renew it', noRequest: true };
     }
     const res = await getJson('https://api.anthropic.com/api/oauth/usage', {
         Authorization: `Bearer ${o.accessToken}`,
         'anthropic-beta': 'oauth-2025-04-20'
     });
     const d = res.data;
+    if (res.status === 429) return { error: 'Anthropic is rate-limiting usage requests - retrying later', limited: true, retryAfterMs: res.retryAfterMs };
     if (res.status !== 200 || !d || !d.five_hour) return { error: `Usage request failed (HTTP ${res.status || 'error'})` };
     const win = w => ({
         pct: Math.round(clampPct(w && w.utilization)),
@@ -194,4 +221,4 @@ async function fetchClaudeUsage(home) {
     return { updatedAt: Date.now(), fiveHour: win(d.five_hour), weekly: win(d.seven_day) };
 }
 
-module.exports = { ClaudeContextReader, fetchClaudeUsage, findLastUsage, encodeProjectDir, readTail, statSafe, TAIL_STEPS, FRESH_MS };
+module.exports = { ClaudeContextReader, fetchClaudeUsage, retryAfterMs, usageDue, usageResult, findLastUsage, encodeProjectDir, readTail, statSafe, TAIL_STEPS, FRESH_MS };

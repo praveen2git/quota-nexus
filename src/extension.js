@@ -6,12 +6,13 @@ const os = require('os');
 const path = require('path');
 const cfg = require('./config');
 const { AgyClient } = require('./agyClient');
-const { ClaudeContextReader, fetchClaudeUsage } = require('./claudeCode');
+const { ClaudeContextReader, fetchClaudeUsage, usageDue, usageResult } = require('./claudeCode');
 const { CodexReader } = require('./codex');
 const { Accounts } = require('./accounts');
 const { evaluateAlerts } = require('./alerts');
 const { History } = require('./history');
 const { buildViewState, seriesId, claudeWindows, codexWindows, markActive, IDLE_MS } = require('./viewState');
+const { settingsView, isValidSetting } = require('./settingsUi');
 const { StatusBar } = require('./statusBar');
 const { DashboardProvider } = require('./webview');
 const { maskEmail, formatCountdown, formatAgo } = require('./util');
@@ -20,6 +21,7 @@ const ALERTS_KEY = 'nexus.alerts.v1';
 const SNOOZE_KEY = 'nexus.alertsSnooze';
 const SNOOZE_MS = 3600e3;
 const USAGE_MIN_GAP_MS = 5 * 60000;
+const USAGE_KEY = 'nexus.ccUsage';
 const WATCH_THROTTLE_MS = 1500;
 const FOCUS_REFRESH_MS = 60000;
 const AG_WATCH_MS = 5000;
@@ -44,7 +46,8 @@ class Nexus {
         this.ccContext = null;
         this.ccUsage = null;
         this.ccUsageError = '';
-        this.ccUsageAt = 0;
+        this.usageForce = false;
+        this.ccUsageUntil = 0;
         this.codexData = null;
         this.updatedAt = 0;
         this.lastRefreshMs = 0;
@@ -54,9 +57,17 @@ class Nexus {
         this.renderTimer = null;
         this.watchers = [];
         this.ctxSeen = {};
+        this.ctxKeys = {};
         this.agChecked = false;
         this.agStatusAt = 0;
         this.tickTimer = null;
+    }
+
+    // Title-bar icons switch on these (bell vs bell-slash, eye vs eye-closed).
+    setContextKey(key, value) {
+        if (this.ctxKeys[key] === value) return;
+        this.ctxKeys[key] = value;
+        vscode.commands.executeCommand('setContext', key, value);
     }
 
     markActive(c) {
@@ -73,8 +84,8 @@ class Nexus {
             vscode.workspace.onDidChangeConfiguration(e => {
                 if (!e.affectsConfiguration(cfg.SECTION)) return;
                 if (e.affectsConfiguration(`${cfg.SECTION}.refresh`)) this.schedule();
-                const refetch = ['claudeCode', 'codex', 'contextWindow'].some(k => e.affectsConfiguration(`${cfg.SECTION}.${k}`));
-                if (refetch) this.refresh(true);
+                const refetch = ['antigravity', 'claudeCode', 'codex', 'contextWindow'].some(k => e.affectsConfiguration(`${cfg.SECTION}.${k}`));
+                if (refetch) this.refresh();
                 else this.render();
             }),
             vscode.window.onDidChangeWindowState(s => {
@@ -85,13 +96,21 @@ class Nexus {
             cmd('quotaNexus.switchAccount', () => this.pickAccount()),
             cmd('quotaNexus.signIn', () => this.guidedSignIn(null)),
             cmd('quotaNexus.toggleMask', () => cfg.set('privacy.maskEmails', !cfg.get('privacy.maskEmails', true))),
+            cmd('quotaNexus.maskEmails', () => cfg.set('privacy.maskEmails', true)),
+            cmd('quotaNexus.showEmails', () => cfg.set('privacy.maskEmails', false)),
+            cmd('quotaNexus.resumeAlerts', () => this.toggleSnooze()),
+            cmd('quotaNexus.togglePercentMode', () => cfg.set('display.percentMode', cfg.get('display.percentMode', 'used') === 'left' ? 'used' : 'left')),
             cmd('quotaNexus.snoozeAlerts', () => this.toggleSnooze()),
             cmd('quotaNexus.showDiagnostics', () => this.showDiagnostics()),
             cmd('quotaNexus.openSettings', () =>
                 vscode.commands.executeCommand('workbench.action.openSettings', `@ext:${c.extension.id}`)),
+            cmd('quotaNexus.quickSettings', () => this.view.showSettings()),
             { dispose: () => this.dispose() }
         );
         this.log.info(`Quota Nexus ${c.extension.packageJSON.version} started on ${process.platform}`);
+        cfg.migrate()
+            .then(moved => moved.forEach(m => this.log.info(`Setting moved: ${m}`)))
+            .catch(e => this.log.warn(`Settings migration skipped: ${e && e.message}`));
         this.watch();
         this.schedule();
         this.render();
@@ -112,7 +131,7 @@ class Nexus {
     }
 
     refresh(force) {
-        if (force) this.ccUsageAt = 0;
+        if (force) this.usageForce = true;
         if (!this.inFlight) {
             this.inFlight = this.doRefresh()
                 .catch(e => this.log.warn(`Refresh failed: ${e && e.message}`))
@@ -125,18 +144,25 @@ class Nexus {
         return (vscode.workspace.workspaceFolders || []).filter(f => f.uri.scheme === 'file').map(f => f.uri.fsPath);
     }
 
+    agEnabled() {
+        return cfg.get('antigravity.enable', true);
+    }
+
     wantAgContext() {
-        return cfg.get('contextWindow.showAntigravity', true) && cfg.get('contextWindow.display', 'auto') !== 'off';
+        return this.agEnabled() && cfg.get('antigravity.showContextWindow', true) && cfg.get('contextWindow.display', 'auto') !== 'off';
     }
 
     // Each source renders as soon as it lands, so fast local logs never wait for agy discovery.
     async doRefresh() {
         const started = Date.now();
         const ws = this.wsPaths();
+        const force = this.usageForce;
+        this.usageForce = false;
         const settle = (name, task, apply) => task
             .then(apply, e => this.log.warn(`${name}: ${e && e.message}`))
             .then(() => { this.updatedAt = Date.now(); this.render(); });
         const agyTask = (async () => {
+            if (!this.agEnabled()) return { s: null, ctx: null };
             const s = await this.agy.getStatus();
             const ctx = s && this.wantAgContext() ? await this.agy.getContext(ws, s.modelLabels).catch(() => null) : null;
             return { s, ctx };
@@ -161,27 +187,34 @@ class Nexus {
                 this.codexData = v;
                 this.runToolAlerts();
             }),
-            settle('Claude Code limits', this.refreshUsage(), () => this.runToolAlerts())
+            settle('Claude Code limits', this.refreshUsage(force), () => this.runToolAlerts())
         ]);
         this.lastRefreshMs = Date.now() - started;
     }
 
-    async refreshUsage() {
+    async refreshUsage(force) {
         if (!cfg.get('claudeCode.enable', true) || !cfg.get('claudeCode.fetchUsageLimits', false)) {
             this.ccUsage = null;
             this.ccUsageError = '';
             return;
         }
-        if (Date.now() - this.ccUsageAt < Math.max(USAGE_MIN_GAP_MS, cfg.interval())) return;
-        this.ccUsageAt = Date.now();
+        // Shared with other windows and reloads so they reuse one result instead of each asking.
+        const gap = Math.max(USAGE_MIN_GAP_MS, cfg.interval());
+        const shared = this.context.globalState.get(USAGE_KEY) || {};
+        this.applyUsage(shared);
+        if (!usageDue(shared, Date.now(), gap, force)) return;
+        await this.context.globalState.update(USAGE_KEY, { ...shared, at: Date.now() });
         const r = await fetchClaudeUsage(this.home);
-        if (r.error) {
-            if (r.error !== this.ccUsageError) this.log.warn(`Claude Code limits: ${r.error}`);
-            this.ccUsageError = r.error;
-        } else {
-            this.ccUsage = r;
-            this.ccUsageError = '';
-        }
+        const next = usageResult(shared, r, Date.now(), gap);
+        await this.context.globalState.update(USAGE_KEY, next);
+        if (r.error && r.error !== this.ccUsageError) this.log.warn(`Claude Code limits: ${r.error}`);
+        this.applyUsage(next);
+    }
+
+    applyUsage(s) {
+        if (s.data) this.ccUsage = s.data;
+        this.ccUsageError = s.error || '';
+        this.ccUsageUntil = s.until || 0;
     }
 
     onStatus(s) {
@@ -218,13 +251,21 @@ class Nexus {
         if (pick === 'Turn On') await cfg.set('claudeCode.fetchUsageLimits', true);
     }
 
+    // From the dashboard panel; turning on Claude limits still goes through the consent dialog.
+    async setSetting(key, value) {
+        if (!isValidSetting(key, value)) return;
+        if (key === 'claudeCode.fetchUsageLimits' && value === true) await this.enableClaudeLimits();
+        else await cfg.set(key, value);
+        this.render();
+    }
+
     snoozedUntil() {
         return this.context.globalState.get(SNOOZE_KEY) || 0;
     }
 
     toggleSnooze() {
         const on = this.snoozedUntil() > Date.now();
-        this.context.globalState.update(SNOOZE_KEY, on ? 0 : Date.now() + SNOOZE_MS);
+        this.context.globalState.update(SNOOZE_KEY, on ? 0 : Date.now() + SNOOZE_MS).then(() => this.render());
         vscode.window.showInformationMessage(on ? 'Quota Nexus: alerts resumed.' : 'Quota Nexus: alerts snoozed for 1 hour.');
     }
 
@@ -254,7 +295,7 @@ class Nexus {
                 'Open Dashboard', 'Snooze 1 Hour'
             ).then(pick => {
                 if (pick === 'Open Dashboard') vscode.commands.executeCommand('quotaNexus.dashboard.focus');
-                else if (pick === 'Snooze 1 Hour') this.context.globalState.update(SNOOZE_KEY, Date.now() + SNOOZE_MS);
+                else if (pick === 'Snooze 1 Hour') this.context.globalState.update(SNOOZE_KEY, Date.now() + SNOOZE_MS).then(() => this.render());
             });
         }
     }
@@ -279,8 +320,9 @@ class Nexus {
         const v = buildViewState({
             mask: cfg.get('privacy.maskEmails', true),
             percentMode: cfg.get('display.percentMode', 'used'),
-            connected: this.connected,
-            connecting: !this.agChecked,
+            antigravityEnabled: this.agEnabled(),
+            connected: this.connected && this.agEnabled(),
+            connecting: !this.agChecked && this.agEnabled(),
             status: this.status,
             accounts: this.accounts.all(),
             agContext: this.markActive(this.agContext),
@@ -302,13 +344,17 @@ class Nexus {
             showEmail: cfg.get('statusBar.showEmail', false),
             format: cfg.get('statusBar.format', 'descriptive'),
             thresholds: cfg.get('alerts.thresholds', [20, 5]).map(Number).filter(n => n > 0 && n < 100),
-            showClaudeUsage: cfg.get('claudeCode.showInNavBar', true),
-            showCodexUsage: cfg.get('codex.showInNavBar', true),
-            showAgContext: cfg.get('contextWindow.showAntigravity', true),
+            showAgUsage: cfg.get('antigravity.showInStatusBar', true),
+            showClaudeUsage: cfg.get('claudeCode.showInStatusBar', true),
+            showCodexUsage: cfg.get('codex.showInStatusBar', true),
+            showAgContext: cfg.get('antigravity.showContextWindow', true),
             showCcContext: ccEnabled && cfg.get('claudeCode.showContextWindow', true),
             showCxContext: cxEnabled && cfg.get('codex.showContextWindow', true),
             contextDisplay: cfg.get('contextWindow.display', 'auto')
         });
+        v.settings = settingsView(k => cfg.get(k));
+        this.setContextKey('quotaNexus.snoozed', v.snoozed);
+        this.setContextKey('quotaNexus.masked', v.mask);
         this.view.setState(v);
     }
 
@@ -323,6 +369,7 @@ class Nexus {
             case 'openSettings': return vscode.commands.executeCommand('quotaNexus.openSettings');
             case 'diagnostics': return this.showDiagnostics();
             case 'enableClaudeLimits': return this.enableClaudeLimits();
+            case 'setSetting': return this.setSetting(msg.key, msg.value);
             case 'snooze': {
                 this.toggleSnooze();
                 return this.render();
@@ -398,7 +445,7 @@ class Nexus {
             `  last success: ${formatAgo(d.lastOkAt)}${d.lastError ? `, last problem: ${d.lastError}` : ''}`,
             `  agy CLI in ~/.gemini/bin: ${this.agyPath() ? 'found' : 'not found'}`,
             `Claude Code logs (~/.claude/projects): ${exists(['.claude', 'projects'])}, session: ${this.ccContext ? 'found' : 'none'}`,
-            `Claude Code limits: ${cfg.get('claudeCode.fetchUsageLimits', false) ? (this.ccUsageError || (this.ccUsage ? 'ok' : 'pending')) : 'off (opt-in)'}`,
+            `Claude Code limits: ${cfg.get('claudeCode.fetchUsageLimits', false) ? (this.ccUsageError || (this.ccUsage ? 'ok' : 'pending')) : 'off (opt-in)'}${this.ccUsageUntil > Date.now() ? `, next try in ${formatCountdown(new Date(this.ccUsageUntil).toISOString())}` : ''}`,
             `Codex logs (~/.codex/sessions): ${exists(['.codex', 'sessions'])}, session: ${this.codexData && this.codexData.context ? 'found' : 'none'}, limits: ${this.codexData && this.codexData.limits ? 'found' : 'none'}`,
             `Last refresh: ${formatAgo(this.updatedAt)}, took ${this.lastRefreshMs} ms`,
             `Alerts: ${cfg.get('alerts.enabled', true) ? 'on' : 'off'}${snooze > Date.now() ? `, snoozed for ${formatCountdown(new Date(snooze).toISOString())}` : ''}`
@@ -438,6 +485,7 @@ class Nexus {
         }));
         // Activity here means agy is up: find it if new, and keep its quota fresh while in use.
         add(path.join(this.home, '.gemini', 'antigravity', 'conversations'), {}, n => !n.endsWith('-shm'), throttled(async () => {
+            if (!this.agEnabled()) return;
             if (!this.connected || Date.now() - this.agStatusAt > AG_STATUS_MS) return this.refresh();
             if (!this.wantAgContext() || !this.status) return;
             this.agContext = await this.agy.getContext(this.wsPaths(), this.status.modelLabels).catch(() => this.agContext);

@@ -7,13 +7,12 @@
     const expanded = new Set(saved.expanded || ['active', 'claude', 'codex']);
     const SVG_NS = 'http://www.w3.org/2000/svg';
     let state = null;
+    let settingsOpen = !!saved.settingsOpen;
+    // While settings are open, skip redraws that change nothing there, so an open dropdown stays open.
+    let shownSig = '';
 
     // Constant SVG markup only; user data always goes through textContent.
     const ICON = {
-        refresh: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/></svg>',
-        gear: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/><path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319z"/></svg>',
-        eye: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z"/><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"/></svg>',
-        bell: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 16a2 2 0 0 0 2-2H6a2 2 0 0 0 2 2zM8 1.918l-.797.161A4.002 4.002 0 0 0 4 6c0 .628-.134 2.197-.459 3.742-.16.767-.376 1.566-.663 2.258h10.244c-.287-.692-.502-1.49-.663-2.258C12.134 8.197 12 6.628 12 6a4.002 4.002 0 0 0-3.203-3.92L8 1.917zM14.22 12c.223.447.481.801.78 1H1c.299-.199.557-.553.78-1C2.68 10.2 3 6.88 3 6c0-2.42 1.72-4.44 4.005-4.901a1 1 0 1 1 1.99 0A5.002 5.002 0 0 1 13 6c0 .88.32 4.2 1.22 6z"/></svg>',
         chevron: '<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/></svg>'
     };
 
@@ -30,10 +29,6 @@
             el.append(c instanceof Node ? c : document.createTextNode(String(c)));
         }
         return el;
-    }
-
-    function iconBtn(action, icon, label, extra) {
-        return h('button', Object.assign({ class: 'icon-btn', 'data-action': action, title: label, 'aria-label': label, html: ICON[icon] }, extra || {}));
     }
 
     function level(pctLeft) {
@@ -186,25 +181,56 @@
                     h('button', { class: 'btn danger', 'data-action': 'remove', 'data-email': a.email }, 'Remove'))) : null);
     }
 
+    function saveView() {
+        vscode.setState({ expanded: [...expanded], settingsOpen });
+    }
+
+    function settingControl(i) {
+        if (i.kind === 'bool') {
+            return h('input', { type: 'checkbox', class: 'switch', 'data-setting': i.key, checked: !!i.value, disabled: i.disabled, 'aria-label': i.label });
+        }
+        if (i.kind === 'enum') {
+            return h('select', { 'data-setting': i.key, disabled: i.disabled, 'aria-label': i.label },
+                i.options.map((o, idx) => h('option', { value: String(idx), selected: o.value === i.value }, o.label)));
+        }
+        const list = Array.isArray(i.value) ? i.value.map(n => `${Number(n)}%`).join(', ') + ' left' : String(i.value);
+        return h('span', { class: 'muted' }, list);
+    }
+
+    // Grouped like VS Code Settings; lists such as alert levels are edited there.
+    function settingsPanel(s) {
+        return [
+            h('div', { class: 'set-head' },
+                h('strong', null, 'Settings'),
+                h('button', { class: 'btn', 'data-action': 'toggleSettings' }, 'Done')),
+            ...(s.settings || []).map(g => h('section', { class: 'card set-group' },
+                h('div', { class: 'set-title' }, g.title),
+                g.items.map(i => h('label', { class: `set-row${i.disabled ? ' dim' : ''}`, title: i.help },
+                    h('span', { class: 'set-label' }, i.label), settingControl(i))))),
+            h('div', { class: 'actions' }, h('button', { class: 'btn', 'data-action': 'openSettings' }, 'All settings in VS Code'))
+        ];
+    }
+
     function render() {
         if (!state) {
             root.replaceChildren(h('div', { class: 'muted pad' }, 'Loading...'));
             return;
         }
         const s = state;
-        const header = h('header', { class: 'top' },
-            h('span', { class: 'brand' }, 'Quota Nexus'),
-            h('span', { class: 'top-actions' },
-                iconBtn('snooze', 'bell', s.snoozed ? 'Alerts snoozed - click to resume' : 'Snooze alerts for 1 hour', { 'aria-pressed': String(!!s.snoozed), class: `icon-btn${s.snoozed ? ' dim' : ''}` }),
-                iconBtn('toggleMask', 'eye', s.mask ? 'Show emails' : 'Mask emails', { 'aria-pressed': String(s.mask) }),
-                iconBtn('refresh', 'refresh', 'Refresh now'),
-                iconBtn('openSettings', 'gear', 'Settings')));
-
+        // Actions live in the view's title bar only, so nothing is shown twice.
+        if (settingsOpen) {
+            root.replaceChildren(...settingsPanel(s));
+            return;
+        }
         const body = [];
+        if (s.snoozed) {
+            body.push(h('div', { class: 'muted small snoozed' }, 'Alerts snoozed for up to 1 hour. ',
+                h('button', { class: 'link', 'data-action': 'snooze' }, 'Resume')));
+        }
         if (s.active) body.push(activeCard(s));
         if (s.claude.show) {
             const extra = s.claude.usageEnabled
-                ? (s.claude.usageError ? h('div', { class: 'muted small' }, s.claude.usageError) : null)
+                ? (s.claude.usageError ? h('div', { class: 'muted small' }, s.claude.usageError + (s.claude.usageAgo ? `. Showing values from ${s.claude.usageAgo}.` : '')) : null)
                 : h('div', { class: 'actions' }, h('button', { class: 'btn', 'data-action': 'enableClaudeLimits' }, 'Show 5-hour and weekly limits'));
             body.push(toolCard('claude', 'Claude Code', 'cc', [badge('CLI', 'cc')], s.claude.windows, s.claude.context, extra));
         }
@@ -215,23 +241,31 @@
             body.push(toolCard('codex', 'Codex', 'cx', [badge(s.codex.idle ? 'Idle' : '', 'plan'), badge(s.codex.plan, 'plan'), badge('CLI', 'cx')], s.codex.windows, s.codex.context,
                 info ? h('div', { class: 'muted small' }, info) : null));
         }
-        // Missing Antigravity goes below the tools that have data.
-        if (!s.active && s.connecting) {
+        // Missing Antigravity goes below the tools that have data; nothing at all when it is turned off.
+        const agOn = s.antigravityEnabled !== false;
+        if (agOn && !s.active && s.connecting) {
             body.push(h('section', { class: 'card notice' }, h('div', { class: 'muted small' }, 'Looking for Antigravity...')));
-        } else if (!s.active) {
+        } else if (agOn && !s.active) {
             body.push(h('section', { class: 'card notice' },
                 h('strong', null, 'Antigravity not detected'),
                 h('div', { class: 'muted small' }, 'Start agy or the Antigravity IDE. Quota Nexus connects to its local server automatically.'),
                 h('div', { class: 'actions' }, h('button', { class: 'btn', 'data-action': 'diagnostics' }, 'Show diagnostics'))));
         }
-        body.push(h('div', { class: 'section-label' }, `Other Antigravity accounts (${s.others.length})`));
-        body.push(...s.others.map(otherCard));
-        body.push(h('button', { class: 'btn wide', 'data-action': 'signIn' }, 'Sign in with another account'));
+        if (agOn) {
+            body.push(h('div', { class: 'section-label' }, `Other Antigravity accounts (${s.others.length})`));
+            body.push(...s.others.map(otherCard));
+            body.push(h('button', { class: 'btn wide', 'data-action': 'signIn' }, 'Sign in with another account'));
+        }
+        if (!body.length) {
+            body.push(h('section', { class: 'card notice' },
+                h('div', { class: 'muted small' }, 'Every tool is turned off or has no data yet.'),
+                h('div', { class: 'actions' }, h('button', { class: 'btn', 'data-action': 'toggleSettings' }, 'Open settings'))));
+        }
         body.push(h('footer', { class: 'muted small' },
             `Updated ${s.updatedAgo} · Unofficial · Local data only · `,
             h('button', { class: 'link', 'data-action': 'diagnostics' }, 'Diagnostics')));
 
-        root.replaceChildren(header, ...body);
+        root.replaceChildren(...body);
     }
 
     root.addEventListener('click', (e) => {
@@ -241,18 +275,41 @@
         if (action === 'toggle') {
             const id = el.getAttribute('data-id');
             if (expanded.has(id)) expanded.delete(id); else expanded.add(id);
-            vscode.setState({ expanded: [...expanded] });
+            saveView();
             render();
             return;
         }
-        if (action === 'refresh') el.classList.add('spin');
+        if (action === 'toggleSettings') {
+            settingsOpen = !settingsOpen;
+            saveView();
+            render();
+            return;
+        }
         vscode.postMessage({ type: action, email: el.getAttribute('data-email') || undefined });
     });
 
+    root.addEventListener('change', (e) => {
+        const el = e.target;
+        if (!(el instanceof HTMLElement) || !el.dataset.setting || !state) return;
+        const item = (state.settings || []).flatMap(g => g.items).find(i => i.key === el.dataset.setting);
+        if (!item) return;
+        const value = item.kind === 'bool' ? /** @type {HTMLInputElement} */ (el).checked : item.options[Number(/** @type {HTMLSelectElement} */ (el).value)].value;
+        shownSig = '';
+        vscode.postMessage({ type: 'setSetting', key: item.key, value });
+    });
     window.addEventListener('message', (e) => {
         const msg = e.data;
+        if (msg && msg.type === 'showSettings') {
+            settingsOpen = msg.mode === 'toggle' ? !settingsOpen : true;
+            saveView();
+            render();
+            return;
+        }
         if (msg && msg.type === 'state') {
             state = msg.state;
+            const sig = settingsOpen ? JSON.stringify([state.settings, state.snoozed, state.mask]) : '';
+            if (sig && sig === shownSig) return;
+            shownSig = sig;
             render();
         }
     });

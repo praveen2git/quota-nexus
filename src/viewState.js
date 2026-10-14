@@ -103,7 +103,8 @@ function buildViewState(input) {
         credits: s.credits || {}
     } : null;
 
-    const others = input.accounts
+    const agOn = input.antigravityEnabled !== false;
+    const others = !agOn ? [] : input.accounts
         .filter(a => a.email.toLowerCase() !== activeEmail)
         .sort((a, b) => (b.lastActive || 0) - (a.lastActive || 0))
         .map(a => ({
@@ -123,7 +124,8 @@ function buildViewState(input) {
         usageEnabled: !!cc.usageEnabled,
         context: cc.enabled ? (cc.context || null) : null,
         windows: ccWins,
-        usageError: cc.usageEnabled ? (cc.usageError || '') : ''
+        usageError: cc.usageEnabled ? (cc.usageError || '') : '',
+        usageAgo: cc.usageEnabled && cc.usage ? formatAgo(cc.usage.updatedAt, now) : ''
     };
     claude.show = claude.enabled && !!(claude.context || ccWins.length || claude.usageError);
 
@@ -154,6 +156,7 @@ function buildViewState(input) {
         percentMode: input.percentMode === 'left' ? 'left' : 'used',
         connected: !!s,
         connecting: !s && !!input.connecting,
+        antigravityEnabled: agOn,
         active,
         others,
         agContext: s ? (input.agContext || null) : null,

@@ -176,3 +176,10 @@ test('a token change marks a session active even when its reported time lags', (
     assert.strictEqual(markActive(seen, ag(20), 9000).timestamp, 7000);
     assert.strictEqual(markActive(seen, null, 9000), null);
 });
+
+test('Antigravity turned off drops other accounts and the connecting state', () => {
+    const v = buildViewState({ now: NOW, connected: false, connecting: false, antigravityEnabled: false, accounts: [{ email: 'b@x.com', lastActive: NOW }] });
+    assert.strictEqual(v.antigravityEnabled, false);
+    assert.deepStrictEqual(v.others, []);
+    assert.strictEqual(v.active, null);
+});

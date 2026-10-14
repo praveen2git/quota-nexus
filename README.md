@@ -61,7 +61,8 @@ Codex writes its rate limits into its logs each time it runs. Nexus shows them "
 - No telemetry, analytics or third-party servers.
 - Stored data (in VS Code's extension storage only):
   - each Antigravity account's email, display name, label, plan and last-seen quota;
-  - 7 days of quota percentages for the charts.
+  - 7 days of quota percentages for the charts;
+  - the last Claude Code limits (percentages and reset times only), so other windows and reloads reuse them instead of asking again.
 - Claude Code limits are off by default. When you turn them on, the token is read-only and is never refreshed or rewritten.
 - Diagnostics never log tokens or full email addresses.
 
@@ -81,32 +82,52 @@ Nexus detects the new account within one refresh.
 - `Quota Nexus: Sign In With Another Antigravity Account`
 - `Quota Nexus: Snooze or Resume Alerts`
 - `Quota Nexus: Toggle Email Masking`
+- `Quota Nexus: Toggle Used / Left`
 - `Quota Nexus: Show Diagnostics`
 - `Quota Nexus: Open Settings`
 
 ## Settings
 
+The quickest way: click the **gear** in the Quota Nexus dashboard title bar. Every switch is there in the same groups, and a tool's switches grey out while that tool is off.
+
+The same settings are in VS Code (**Settings > Extensions > Quota Nexus**). All names start with `quotaNexus.`.
+
+**General**
+
 | Setting | Default | What it does |
 |---|---|---|
-| `quotaNexus.statusBar.show` | `true` | Show quota in the status bar |
-| `quotaNexus.statusBar.format` | `descriptive` | `descriptive`, `compact` or `minimal` labels |
-| `quotaNexus.display.percentMode` | `used` | Show percent `used` or percent `left` |
-| `quotaNexus.statusBar.showEmail` | `false` | Show the Antigravity account in the status bar |
-| `quotaNexus.privacy.maskEmails` | `true` | Mask emails |
-| `quotaNexus.refresh.activeInterval` | `60000` | Refresh interval in ms (30 s to 5 min) |
-| `quotaNexus.refresh.pauseWhenUnfocused` | `true` | Pause polling when the window is in the background |
-| `quotaNexus.alerts.enabled` | `true` | Low-quota notifications for all three tools |
-| `quotaNexus.alerts.thresholds` | `[20, 5]` | Percent-left levels for alerts and status bar colors |
-| `quotaNexus.alerts.notifyOnReset` | `true` | Notify when a quota is full again |
-| `quotaNexus.contextWindow.display` | `auto` | `auto`, `antigravity`, `claudeCode`, `codex`, `all` or `off` |
-| `quotaNexus.contextWindow.showAntigravity` | `true` | Track the Antigravity context window |
-| `quotaNexus.claudeCode.enable` | `true` | Track Claude Code sessions from local logs |
-| `quotaNexus.claudeCode.showContextWindow` | `true` | Include Claude Code context in the status bar |
-| `quotaNexus.claudeCode.fetchUsageLimits` | `false` | Opt-in Claude Code 5-hour and weekly limits |
-| `quotaNexus.claudeCode.showInNavBar` | `true` | Include Claude Code limits in the status bar |
-| `quotaNexus.codex.enable` | `true` | Track Codex sessions and rate limits from local logs |
-| `quotaNexus.codex.showInNavBar` | `true` | Include Codex limits in the status bar |
-| `quotaNexus.codex.showContextWindow` | `true` | Include Codex context in the status bar |
+| `display.percentMode` | `used` | Show percent `used` or percent `left` |
+| `privacy.maskEmails` | `true` | Mask emails |
+| `refresh.activeInterval` | 1 minute | How often to refresh (30 seconds to 5 minutes) |
+| `refresh.pauseWhenUnfocused` | `true` | Pause the timed refresh while VS Code is in the background |
+
+**Status Bar**
+
+| Setting | Default | What it does |
+|---|---|---|
+| `statusBar.show` | `true` | Show the quota item |
+| `statusBar.format` | `descriptive` | `descriptive`, `compact` or `minimal` |
+| `statusBar.showEmail` | `false` | Show the Antigravity account |
+| `contextWindow.display` | `auto` | Which context windows to show: `auto`, `antigravity`, `claudeCode`, `codex`, `all` or `off` |
+
+**Alerts**
+
+| Setting | Default | What it does |
+|---|---|---|
+| `alerts.enabled` | `true` | Low-quota notifications for all three tools |
+| `alerts.thresholds` | `[20, 5]` | Percent-left levels for alerts and status bar colours |
+| `alerts.notifyOnReset` | `true` | Notify when a quota is full again |
+
+**Antigravity, Claude Code and Codex** (each tool has the same switches)
+
+| Setting | Default | What it does |
+|---|---|---|
+| `<tool>.enable` | `true` | Track this tool. Off: Antigravity is not searched for, logs are not read |
+| `<tool>.showInStatusBar` | `true` | Include its quota or limits in the status bar (still in the hover and dashboard) |
+| `<tool>.showContextWindow` | `true` | Include its context window |
+| `claudeCode.fetchUsageLimits` | `false` | Opt-in Claude Code 5-hour and weekly limits |
+
+`<tool>` is `antigravity`, `claudeCode` or `codex`. Settings from older versions (`showInNavBar`, `contextWindow.showAntigravity`) move to the new names automatically.
 
 ## Requirements
 
@@ -119,7 +140,7 @@ Nexus detects the new account within one refresh.
 - Antigravity and Claude Code context window sizes are estimates. Codex reports its own.
 - Inactive Antigravity accounts are not polled. Their numbers are the last values seen while they were active.
 - Codex limits update only when Codex runs. After 7 days without Codex activity they leave the status bar (the dashboard still shows them, marked Idle).
-- Claude Code limits use an undocumented endpoint that may change.
+- Claude Code limits use an undocumented endpoint that may change. If Anthropic rate-limits it, Nexus waits longer between tries (up to 30 minutes) and keeps showing the last values.
 - Forecasts need about 15 minutes of history before they appear.
 
 ## License

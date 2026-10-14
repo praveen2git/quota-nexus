@@ -91,3 +91,29 @@ test('rpc only talks to 127.0.0.1 and sends the csrf header', async () => {
         await new Promise(r => server.close(r));
     }
 });
+
+test('Claude limits: one request per gap across windows, backing off after 429', () => {
+    const { usageDue, usageResult, retryAfterMs } = require('../src/claudeCode');
+    const GAP = 5 * 60e3;
+    let s = {};
+    const t0 = 1e12;
+    assert.strictEqual(usageDue(s, t0, GAP, false), true, 'first run asks');
+    s = usageResult(s, { error: 'limited', limited: true }, t0, GAP);
+    assert.strictEqual(s.until, t0 + GAP);
+    assert.strictEqual(usageDue(s, t0 + 60e3, GAP, true), false, 'manual refresh waits out the backoff');
+    s = usageResult(s, { error: 'limited', limited: true }, t0 + GAP, GAP);
+    assert.strictEqual(s.until - (t0 + GAP), 2 * GAP, 'doubles');
+    for (let i = 0; i < 5; i++) s = usageResult(s, { error: 'limited', limited: true }, t0, GAP);
+    assert.strictEqual(s.until - t0, 30 * 60e3, 'capped at 30 minutes');
+    s = usageResult(s, { error: 'limited', retryAfterMs: 45 * 60e3 }, t0, GAP);
+    assert.strictEqual(s.until - t0, 45 * 60e3, 'Retry-After wins when longer');
+    const ok = usageResult(s, { updatedAt: t0, fiveHour: { pct: 1 } }, t0, GAP);
+    assert.deepStrictEqual([ok.fails, ok.until, ok.error], [0, 0, '']);
+    assert.strictEqual(usageDue(ok, t0 + 2 * 60e3, GAP, false), false, 'another window reuses the result');
+    assert.strictEqual(usageDue(ok, t0 + 2 * 60e3, GAP, true), true, 'manual refresh after a minute');
+    const local = usageResult(ok, { error: 'expired', noRequest: true }, t0 + 9e5, GAP);
+    assert.deepStrictEqual([local.at, local.until, local.data], [ok.at, 0, ok.data], 'local errors keep data and do not back off');
+    assert.strictEqual(retryAfterMs('120'), 120e3);
+    assert.strictEqual(retryAfterMs('999999'), 3600e3, 'capped at 1 hour');
+    assert.strictEqual(retryAfterMs('garbage'), 0);
+});

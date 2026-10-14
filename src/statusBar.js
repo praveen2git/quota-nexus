@@ -4,9 +4,9 @@ const vscode = require('vscode');
 const { textBar, escapeMarkdown: esc, formatTokens } = require('./util');
 
 const FOCUS_CMD = 'quotaNexus.dashboard.focus';
-const SETTINGS_CMD = 'workbench.action.openSettings';
+const TOGGLE_CMD = 'quotaNexus.togglePercentMode';
 const FOOTER = `[Open Quota Nexus](command:${FOCUS_CMD})`;
-const MODE_LINK = `command:${SETTINGS_CMD}?${encodeURIComponent(JSON.stringify(['quotaNexus.display.percentMode']))}`;
+const MODE_LINK = `command:${TOGGLE_CMD}`;
 // Short formats carry an arrow: down = left, up = used.
 const MARK = { left: '↓', used: '↑' };
 const OTHER = { left: 'used', used: 'left' };
@@ -20,7 +20,7 @@ const SOURCE = {
 
 function tooltip() {
     const md = new vscode.MarkdownString('', true);
-    md.isTrusted = { enabledCommands: [FOCUS_CMD, SETTINGS_CMD] };
+    md.isTrusted = { enabledCommands: [FOCUS_CMD, TOGGLE_CMD] };
     return md;
 }
 
@@ -127,7 +127,7 @@ class StatusBar {
         if (!opt.show) return item.hide();
         const mode = v.percentMode === 'left' ? 'left' : 'used';
         const parts = [];
-        if (v.active && v.active.pools.length) parts.push(poolsText(v.active.pools, opt.format, mode));
+        if (opt.showAgUsage !== false && v.active && v.active.pools.length) parts.push(poolsText(v.active.pools, opt.format, mode));
         if (opt.showClaudeUsage && v.claude.windows.length) parts.push(limitText('CC', v.claude.windows, opt.format, mode));
         if (opt.showCodexUsage && v.codex.windows.length && !v.codex.idle) parts.push(limitText('CX', v.codex.windows, opt.format, mode));
         const prefix = opt.showEmail && v.active ? `${stripIcons(v.active.display)} | ` : '';
@@ -156,12 +156,13 @@ class StatusBar {
             limitTable(md, title, wins, note, mode, first);
             first = false;
         };
-        if (v.claude.windows.length) section('Claude Code limits', v.claude.windows, '');
+        if (v.claude.windows.length) section('Claude Code limits', v.claude.windows, v.claude.usageError ? `${v.claude.usageError} · as of ${v.claude.usageAgo}` : '');
         if (v.codex.windows.length && !v.codex.idle) {
             section('Codex limits', v.codex.windows, [v.codex.plan && `Plan: ${v.codex.plan}`, v.codex.credits, `as of ${v.codex.asOfAgo}`].filter(Boolean).join(' · '));
         }
         const missing = [];
-        if (!v.active) missing.push(v.connecting ? '*Looking for Antigravity...*' : '*Antigravity not detected - start `agy` or the Antigravity IDE.*');
+        if (!v.active && v.antigravityEnabled !== false) missing.push(v.connecting ? '*Looking for Antigravity...*' : '*Antigravity not detected - start `agy` or the Antigravity IDE.*');
+        if (v.claude.usageError && !v.claude.windows.length) missing.push(`*Claude Code limits: ${esc(v.claude.usageError)}*`);
         if (v.codex.idle) missing.push(`*Codex not used for ${esc(v.codex.lastUsedAgo.replace(/ ago$/, ''))} - hidden until it runs again.*`);
         if (first && !missing.length) md.appendMarkdown('### Quota Nexus\n\nNo quota data yet.\n\n');
         if (missing.length) md.appendMarkdown(`${first ? '' : '---\n\n'}${missing.join('\n\n')}\n\n`);

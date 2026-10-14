@@ -3,7 +3,7 @@
 const vscode = require('vscode');
 const crypto = require('crypto');
 
-const ALLOWED = new Set(['ready', 'refresh', 'switch', 'signIn', 'rename', 'remove', 'toggleMask', 'openSettings', 'diagnostics', 'snooze', 'enableClaudeLimits']);
+const ALLOWED = new Set(['ready', 'refresh', 'switch', 'signIn', 'rename', 'remove', 'toggleMask', 'openSettings', 'diagnostics', 'snooze', 'enableClaudeLimits', 'setSetting']);
 
 class DashboardProvider {
     constructor(extensionUri, onMessage) {
@@ -11,22 +11,42 @@ class DashboardProvider {
         this.onMessage = onMessage;
         this.view = null;
         this.state = null;
+        this.ready = false;
+        this.pendingSettings = false;
     }
 
     resolveWebviewView(view) {
         this.view = view;
+        this.ready = false;
         const media = vscode.Uri.joinPath(this.extensionUri, 'media');
         view.webview.options = { enableScripts: true, localResourceRoots: [media] };
         view.webview.html = this.html(view.webview, media);
         view.webview.onDidReceiveMessage((msg) => {
             if (!msg || !ALLOWED.has(msg.type)) return;
-            if (msg.type === 'ready') return this.post();
+            if (msg.type === 'ready') {
+                this.ready = true;
+                this.post();
+                return this.flushSettings();
+            }
             this.onMessage(msg);
         });
         view.onDidChangeVisibility(() => {
             if (view.visible) this.post();
         });
-        view.onDidDispose(() => { this.view = null; });
+        view.onDidDispose(() => { this.view = null; this.ready = false; });
+    }
+
+    // Gear: toggles settings when the dashboard is showing, else opens it on settings.
+    showSettings() {
+        this.pendingSettings = this.view && this.view.visible ? 'toggle' : 'open';
+        return vscode.commands.executeCommand('quotaNexus.dashboard.focus').then(() => this.flushSettings());
+    }
+
+    flushSettings() {
+        if (!this.pendingSettings || !this.view || !this.ready) return;
+        const mode = this.pendingSettings;
+        this.pendingSettings = false;
+        this.view.webview.postMessage({ type: 'showSettings', mode });
     }
 
     setState(state) {

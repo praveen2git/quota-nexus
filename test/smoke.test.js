@@ -14,13 +14,13 @@ function makeVscode(calls) {
         version: '1.99.0',
         StatusBarAlignment: { Right: 2 },
         ProgressLocation: { Window: 10 },
-        ConfigurationTarget: { Global: 1 },
+        ConfigurationTarget: { Global: 1, Workspace: 2 },
         ThemeColor: class { constructor(id) { this.id = id; } },
         MarkdownString,
         Uri: { joinPath: (u, ...p) => ({ fsPath: path.join(u.fsPath, ...p) }) },
         workspace: {
             workspaceFolders: [],
-            getConfiguration: () => ({ get: () => undefined, update: async () => {} }),
+            getConfiguration: () => ({ get: () => undefined, inspect: () => undefined, update: async () => {} }),
             onDidChangeConfiguration: emitter()
         },
         window: {
