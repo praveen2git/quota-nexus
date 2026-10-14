@@ -3,7 +3,7 @@
 const vscode = require('vscode');
 const crypto = require('crypto');
 
-const ALLOWED = new Set(['ready', 'refresh', 'switch', 'signIn', 'rename', 'remove', 'toggleMask', 'openSettings', 'diagnostics', 'snooze']);
+const ALLOWED = new Set(['ready', 'refresh', 'switch', 'signIn', 'rename', 'remove', 'toggleMask', 'openSettings', 'diagnostics', 'snooze', 'enableClaudeLimits']);
 
 class DashboardProvider {
     constructor(extensionUri, onMessage) {

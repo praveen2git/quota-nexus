@@ -186,8 +186,10 @@
                 h('div', { class: 'actions' }, h('button', { class: 'btn', 'data-action': 'diagnostics' }, 'Show diagnostics'))));
         }
         if (s.claude.show) {
-            const err = s.claude.usageError ? h('div', { class: 'muted small' }, s.claude.usageError) : null;
-            body.push(toolCard('claude', 'Claude Code', 'cc', [badge('CLI', 'cc')], s.claude.windows, s.claude.context, err));
+            const extra = s.claude.usageEnabled
+                ? (s.claude.usageError ? h('div', { class: 'muted small' }, s.claude.usageError) : null)
+                : h('div', { class: 'actions' }, h('button', { class: 'btn', 'data-action': 'enableClaudeLimits' }, 'Show 5-hour and weekly limits'));
+            body.push(toolCard('claude', 'Claude Code', 'cc', [badge('CLI', 'cc')], s.claude.windows, s.claude.context, extra));
         }
         if (s.codex.show) {
             const info = [s.codex.credits, s.codex.windows.length ? `Limits as of ${s.codex.asOfAgo}` : ''].filter(Boolean).join(' · ');

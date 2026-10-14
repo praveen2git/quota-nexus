@@ -10,6 +10,7 @@
 - Antigravity model ids show as readable names (for example `gemini-3.8-flash-n` is now "Gemini 3.8 Flash").
 
 ### Changed
+- The Claude Code card has a "Show 5-hour and weekly limits" button that turns the opt-in on after a consent dialog.
 - README now has screenshots, install steps for VS Code and Open VSX, and badges.
 - Clearer Marketplace description and more search keywords (usage limits, rate limits, token usage, AI usage).
 - License holder is now "Quota Nexus" (was a leftover from 1.0).

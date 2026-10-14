@@ -183,6 +183,17 @@ class Nexus {
         }
     }
 
+    // Opt-in stays explicit: the user sees exactly what is read and where it goes.
+    async enableClaudeLimits() {
+        const detail = [
+            'Quota Nexus will read your existing Claude Code sign-in token from ~/.claude/.credentials.json.',
+            'It sends it only to api.anthropic.com, at most every 5 minutes, to fetch your 5-hour and weekly limits.',
+            'The token is never stored, logged, refreshed or rewritten. You can turn this off any time in Settings.'
+        ].join('\n\n');
+        const pick = await vscode.window.showInformationMessage('Show Claude Code limits?', { modal: true, detail }, 'Turn On');
+        if (pick === 'Turn On') await cfg.set('claudeCode.fetchUsageLimits', true);
+    }
+
     snoozedUntil() {
         return this.context.globalState.get(SNOOZE_KEY) || 0;
     }
@@ -285,6 +296,7 @@ class Nexus {
             case 'toggleMask': return cfg.set('privacy.maskEmails', !cfg.get('privacy.maskEmails', true));
             case 'openSettings': return vscode.commands.executeCommand('quotaNexus.openSettings');
             case 'diagnostics': return this.showDiagnostics();
+            case 'enableClaudeLimits': return this.enableClaudeLimits();
             case 'snooze': {
                 this.toggleSnooze();
                 return this.render();
