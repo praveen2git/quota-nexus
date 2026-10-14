@@ -1,0 +1,144 @@
+'use strict';
+
+const { formatCountdown, formatWallClock, formatAgo, maskEmail } = require('./util');
+const { forecast, sparkline } = require('./history');
+
+const seriesId = {
+    ag: (email, poolId) => `ag:${String(email).toLowerCase()}:${poolId}`,
+    cc: id => `cc:${id}`,
+    cx: id => `cx:${id}`
+};
+
+function toIso(ms) {
+    return new Date(ms).toISOString();
+}
+
+function forecastText(points, pctLeft, resetTime, now) {
+    if (!points || pctLeft >= 100) return '';
+    const f = forecast(points, pctLeft, resetTime, now);
+    if (!f || f.status === 'steady') return '';
+    if (f.status === 'lasts') return 'At this pace it lasts until the reset';
+    const iso = toIso(f.at);
+    return `At this pace it runs out in ${formatCountdown(iso, now)} (${formatWallClock(iso, now)})`;
+}
+
+// Snapshots of inactive accounts go stale; a passed reset time means the pool has refilled.
+function poolView(p, now, fromSnapshot, points) {
+    const resetMs = Date.parse(p.resetTime || '');
+    const resetPassed = fromSnapshot && !isNaN(resetMs) && resetMs <= now;
+    const pct = resetPassed ? 100 : p.remainingPct;
+    return {
+        id: p.id,
+        name: p.name,
+        short: p.short,
+        models: [...new Set(p.models || [])],
+        pct,
+        estimated: resetPassed,
+        countdown: pct >= 100 ? '' : formatCountdown(p.resetTime, now),
+        wall: pct >= 100 ? '' : formatWallClock(p.resetTime, now),
+        spark: points ? sparkline(points, now) : null,
+        forecast: points ? forecastText(points, pct, p.resetTime, now) : ''
+    };
+}
+
+// "Used" windows (Claude Code, Codex). Log-based values may predate a reset.
+function usedView(w, now, mayBeStale, points) {
+    const resetMs = Date.parse(w.resetsAt || '');
+    const resetPassed = mayBeStale && !isNaN(resetMs) && resetMs <= now;
+    const pct = resetPassed ? 0 : w.pct;
+    return {
+        id: w.id,
+        name: w.name,
+        pct,
+        estimated: resetPassed,
+        countdown: resetPassed ? '' : formatCountdown(w.resetsAt, now),
+        wall: resetPassed ? '' : formatWallClock(w.resetsAt, now),
+        spark: points ? sparkline(points, now) : null,
+        forecast: points ? forecastText(points, 100 - pct, w.resetsAt, now) : ''
+    };
+}
+
+function claudeWindows(usage) {
+    if (!usage) return [];
+    return [['cc-5h', '5-hour', usage.fiveHour], ['cc-wk', 'Weekly', usage.weekly]]
+        .filter(([, , w]) => w)
+        .map(([id, name, w]) => ({ id, name, pct: w.pct, resetsAt: w.resetsAt }));
+}
+
+function codexWindows(limits) {
+    if (!limits) return [];
+    return limits.windows.map(w => ({ id: `cx-${w.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`, name: w.name, pct: w.pct, resetsAt: w.resetsAt }));
+}
+
+function buildViewState(input) {
+    const now = input.now || Date.now();
+    const mask = !!input.mask;
+    const hist = input.history || (() => null);
+    const s = input.connected ? input.status : null;
+    const activeEmail = s ? s.email.toLowerCase() : '';
+    const activeAcc = s ? (input.accounts.find(a => a.email.toLowerCase() === activeEmail) || {}) : null;
+
+    const active = s ? {
+        email: s.email,
+        display: maskEmail(s.email, mask) || 'Signed-in account',
+        label: activeAcc.label || '',
+        planName: s.planName,
+        pools: s.pools.map(p => poolView(p, now, false, hist(seriesId.ag(s.email, p.id)))),
+        credits: s.credits || {}
+    } : null;
+
+    const others = input.accounts
+        .filter(a => a.email.toLowerCase() !== activeEmail)
+        .sort((a, b) => (b.lastActive || 0) - (a.lastActive || 0))
+        .map(a => ({
+            email: a.email,
+            display: maskEmail(a.email, mask),
+            label: a.label || '',
+            planName: a.planName || '',
+            lastActiveAgo: formatAgo(a.lastActive, now),
+            snapshotAgo: a.snapshot ? formatAgo(a.snapshot.capturedAt, now) : '',
+            pools: a.snapshot ? a.snapshot.pools.map(p => poolView(p, now, true, null)) : []
+        }));
+
+    const cc = input.claude || {};
+    const ccWins = cc.usageEnabled ? claudeWindows(cc.usage).map(w => usedView(w, now, false, hist(seriesId.cc(w.id)))) : [];
+    const claude = {
+        enabled: !!cc.enabled,
+        usageEnabled: !!cc.usageEnabled,
+        context: cc.enabled ? (cc.context || null) : null,
+        windows: ccWins,
+        usageError: cc.usageEnabled ? (cc.usageError || '') : ''
+    };
+    claude.show = claude.enabled && !!(claude.context || ccWins.length || claude.usageError);
+
+    const cx = input.codex || {};
+    const cxData = cx.enabled ? cx.data : null;
+    const lim = cxData && cxData.limits;
+    const codex = {
+        enabled: !!cx.enabled,
+        context: cxData ? cxData.context : null,
+        windows: codexWindows(lim).map(w => usedView(w, now, true, hist(seriesId.cx(w.id)))),
+        plan: lim ? lim.plan : '',
+        credits: lim ? lim.credits : null,
+        asOfAgo: lim ? formatAgo(lim.at, now) : ''
+    };
+    codex.show = codex.enabled && !!(codex.context || codex.windows.length);
+
+    const lefts = [];
+    if (active) lefts.push(...active.pools.map(p => p.pct));
+    lefts.push(...ccWins.map(w => 100 - w.pct), ...codex.windows.map(w => 100 - w.pct));
+
+    return {
+        mask,
+        connected: !!s,
+        active,
+        others,
+        agContext: s ? (input.agContext || null) : null,
+        claude,
+        codex,
+        updatedAgo: formatAgo(input.updatedAt, now),
+        minPct: lefts.length ? Math.min(...lefts) : null
+    };
+}
+
+module.exports = { buildViewState, seriesId, claudeWindows, codexWindows };

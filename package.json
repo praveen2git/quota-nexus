@@ -1,0 +1,275 @@
+{
+  "name": "quota-nexus",
+  "displayName": "Quota Nexus - AI Usage & Context Monitor",
+  "description": "Unofficial quota, reset-time and context-window monitor for Antigravity, Claude Code and Codex. Alerts, forecasts and history. Read-only, local-first, stores no sign-in tokens.",
+  "version": "1.2.0",
+  "publisher": "quota-nexus",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "icon": "assets/icon.png",
+  "galleryBanner": {
+    "color": "#11141c",
+    "theme": "dark"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/praveen2git/quota-nexus"
+  },
+  "bugs": {
+    "url": "https://github.com/praveen2git/quota-nexus/issues"
+  },
+  "homepage": "https://github.com/praveen2git/quota-nexus#readme",
+  "categories": [
+    "AI",
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "quota",
+    "usage",
+    "rate limit",
+    "context window",
+    "antigravity",
+    "agy",
+    "claude code",
+    "codex",
+    "gemini",
+    "status bar"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./src/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    },
+    "virtualWorkspaces": false
+  },
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "quotaNexus",
+          "title": "Quota Nexus",
+          "icon": "assets/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "quotaNexus": [
+        {
+          "type": "webview",
+          "id": "quotaNexus.dashboard",
+          "name": "Dashboard",
+          "icon": "assets/icon.svg"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "quotaNexus.refresh",
+        "title": "Refresh Quota",
+        "category": "Quota Nexus",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "quotaNexus.switchAccount",
+        "title": "Switch Antigravity Account",
+        "category": "Quota Nexus",
+        "icon": "$(arrow-swap)"
+      },
+      {
+        "command": "quotaNexus.signIn",
+        "title": "Sign In With Another Antigravity Account",
+        "category": "Quota Nexus",
+        "icon": "$(add)"
+      },
+      {
+        "command": "quotaNexus.toggleMask",
+        "title": "Toggle Email Masking",
+        "category": "Quota Nexus",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "quotaNexus.snoozeAlerts",
+        "title": "Snooze or Resume Alerts",
+        "category": "Quota Nexus",
+        "icon": "$(bell-slash)"
+      },
+      {
+        "command": "quotaNexus.showDiagnostics",
+        "title": "Show Diagnostics",
+        "category": "Quota Nexus",
+        "icon": "$(pulse)"
+      },
+      {
+        "command": "quotaNexus.openSettings",
+        "title": "Open Settings",
+        "category": "Quota Nexus",
+        "icon": "$(gear)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "quotaNexus.refresh",
+          "when": "view == quotaNexus.dashboard",
+          "group": "navigation@1"
+        },
+        {
+          "command": "quotaNexus.switchAccount",
+          "when": "view == quotaNexus.dashboard",
+          "group": "navigation@2"
+        },
+        {
+          "command": "quotaNexus.openSettings",
+          "when": "view == quotaNexus.dashboard",
+          "group": "navigation@3"
+        },
+        {
+          "command": "quotaNexus.showDiagnostics",
+          "when": "view == quotaNexus.dashboard",
+          "group": "more@1"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Quota Nexus",
+      "properties": {
+        "quotaNexus.statusBar.show": {
+          "type": "boolean",
+          "default": true,
+          "order": 1,
+          "description": "Show quota in the status bar."
+        },
+        "quotaNexus.statusBar.format": {
+          "type": "string",
+          "default": "descriptive",
+          "order": 2,
+          "enum": ["descriptive", "compact", "minimal"],
+          "enumDescriptions": [
+            "Antigravity: Gemini 100% · Claude / GPT-OSS 22% | Claude Code: 3% · wk 76% | Codex: 34%",
+            "AG: Gem 100% · Cl/GPT 22% | CC: 3% · wk 76% | CX: 34%",
+            "Gem 100% | Cl/GPT 22% | CC 3% · wk 76% | CX 34%"
+          ],
+          "description": "Label style for the status bar."
+        },
+        "quotaNexus.statusBar.showEmail": {
+          "type": "boolean",
+          "default": false,
+          "order": 3,
+          "description": "Show the signed-in Antigravity account in the status bar. Off by default for screen sharing."
+        },
+        "quotaNexus.privacy.maskEmails": {
+          "type": "boolean",
+          "default": true,
+          "order": 4,
+          "description": "Mask email addresses (for example ali****@example.com)."
+        },
+        "quotaNexus.refresh.activeInterval": {
+          "type": "number",
+          "default": 60000,
+          "order": 5,
+          "enum": [30000, 60000, 120000, 300000],
+          "enumDescriptions": ["30 seconds", "1 minute", "2 minutes", "5 minutes"],
+          "description": "How often to refresh quota."
+        },
+        "quotaNexus.refresh.pauseWhenUnfocused": {
+          "type": "boolean",
+          "default": true,
+          "order": 6,
+          "description": "Pause polling while the window is not focused. Refreshes as soon as you return."
+        },
+        "quotaNexus.alerts.enabled": {
+          "type": "boolean",
+          "default": true,
+          "order": 10,
+          "description": "Notify when a quota or limit runs low (Antigravity, Claude Code and Codex)."
+        },
+        "quotaNexus.alerts.thresholds": {
+          "type": "array",
+          "items": { "type": "number", "minimum": 1, "maximum": 99 },
+          "default": [20, 5],
+          "order": 11,
+          "description": "Percent-left levels that trigger a notification. The highest also turns the status bar yellow, the lowest red."
+        },
+        "quotaNexus.alerts.notifyOnReset": {
+          "type": "boolean",
+          "default": true,
+          "order": 12,
+          "description": "Notify when a used quota is full again."
+        },
+        "quotaNexus.contextWindow.display": {
+          "type": "string",
+          "default": "auto",
+          "order": 20,
+          "enum": ["auto", "antigravity", "claudeCode", "codex", "all", "off"],
+          "enumDescriptions": [
+            "Show the most recently active session",
+            "Always show Antigravity",
+            "Always show Claude Code",
+            "Always show Codex",
+            "Show every tracked session side by side",
+            "Hide the context window item"
+          ],
+          "description": "Which context window to show in the status bar."
+        },
+        "quotaNexus.contextWindow.showAntigravity": {
+          "type": "boolean",
+          "default": true,
+          "order": 21,
+          "description": "Track the context window of the active Antigravity conversation."
+        },
+        "quotaNexus.claudeCode.enable": {
+          "type": "boolean",
+          "default": true,
+          "order": 30,
+          "description": "Track Claude Code sessions from the local logs in ~/.claude/projects."
+        },
+        "quotaNexus.claudeCode.showContextWindow": {
+          "type": "boolean",
+          "default": true,
+          "order": 31,
+          "description": "Include the Claude Code context window in the status bar."
+        },
+        "quotaNexus.claudeCode.fetchUsageLimits": {
+          "type": "boolean",
+          "default": false,
+          "order": 32,
+          "markdownDescription": "Show Claude Code 5-hour and weekly limits. **Opt-in:** reads your existing Claude Code token from `~/.claude/.credentials.json` and sends it only to `api.anthropic.com`, at most every 5 minutes. Never refreshes or rewrites the token. Uses an undocumented endpoint that may change."
+        },
+        "quotaNexus.claudeCode.showInNavBar": {
+          "type": "boolean",
+          "default": true,
+          "order": 33,
+          "description": "Include Claude Code limits in the status bar (needs Fetch Usage Limits)."
+        },
+        "quotaNexus.codex.enable": {
+          "type": "boolean",
+          "default": true,
+          "order": 40,
+          "description": "Track Codex sessions and rate limits from the local logs in ~/.codex/sessions. No network, no token."
+        },
+        "quotaNexus.codex.showInNavBar": {
+          "type": "boolean",
+          "default": true,
+          "order": 41,
+          "description": "Include Codex rate limits in the status bar."
+        },
+        "quotaNexus.codex.showContextWindow": {
+          "type": "boolean",
+          "default": true,
+          "order": 42,
+          "description": "Include the Codex context window in the status bar."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "package": "npx --yes @vscode/vsce@4.0.0 package"
+  }
+}

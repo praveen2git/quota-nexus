@@ -1,0 +1,289 @@
+/* Theme-aware: only VS Code tokens, so light, dark and high-contrast all work. */
+:root {
+    --nx-ok: var(--vscode-charts-green, #3fb950);
+    --nx-warn: var(--vscode-charts-yellow, #d29922);
+    --nx-low: var(--vscode-charts-red, #f85149);
+    --nx-cc: var(--vscode-charts-orange, #f59e0b);
+    --nx-cx: var(--vscode-charts-blue, #3794ff);
+    --nx-border: var(--vscode-widget-border, var(--vscode-panel-border, rgba(128, 128, 128, 0.35)));
+    --nx-card: var(--vscode-sideBarSectionHeader-background, rgba(128, 128, 128, 0.08));
+}
+
+body {
+    margin: 0;
+    padding: 8px 10px 12px;
+    color: var(--vscode-foreground);
+    background: var(--vscode-sideBar-background);
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size, 12px);
+}
+
+button {
+    font: inherit;
+    color: inherit;
+}
+
+button:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+}
+
+.top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.brand {
+    font-weight: 700;
+    letter-spacing: 0.3px;
+}
+
+.top-actions {
+    display: flex;
+    gap: 2px;
+}
+
+.icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--vscode-icon-foreground, var(--vscode-foreground));
+    cursor: pointer;
+}
+
+.icon-btn:hover {
+    background: var(--vscode-toolbar-hoverBackground);
+}
+
+.icon-btn.spin svg {
+    animation: nx-spin 0.8s linear infinite;
+}
+
+@keyframes nx-spin {
+    to { transform: rotate(360deg); }
+}
+
+.card {
+    border: 1px solid var(--nx-border);
+    background: var(--nx-card);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-bottom: 8px;
+}
+
+.card.active {
+    border-color: var(--vscode-focusBorder, var(--nx-border));
+}
+
+.card-head {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    text-align: left;
+}
+
+.card-title {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    font-weight: 600;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-right: 6px;
+    border-radius: 50%;
+    background: var(--vscode-descriptionForeground);
+    flex-shrink: 0;
+}
+
+.dot.on { background: var(--nx-ok); }
+.dot.cc { background: var(--nx-cc); }
+
+.badges {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.badge {
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    background: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+}
+
+.badge.on { background: var(--nx-ok); color: var(--vscode-editor-background); }
+.badge.cc { background: var(--nx-cc); color: var(--vscode-editor-background); }
+.badge.label { background: transparent; color: var(--vscode-foreground); border: 1px solid var(--nx-border); }
+
+.chev {
+    display: inline-flex;
+    color: var(--vscode-descriptionForeground);
+    transition: transform 0.15s ease;
+}
+
+.chev.up { transform: rotate(180deg); }
+
+.summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    margin: 5px 0 0 13px;
+    color: var(--vscode-descriptionForeground);
+    font-size: 11px;
+}
+
+.details {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.row-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 11px;
+}
+
+.row-name { font-weight: 600; }
+.row-pct { font-variant-numeric: tabular-nums; }
+
+.bar {
+    height: 5px;
+    margin: 3px 0 2px;
+    border-radius: 3px;
+    background: var(--vscode-editorWidget-border, rgba(128, 128, 128, 0.3));
+    overflow: hidden;
+}
+
+.bar-fill {
+    height: 100%;
+    border-radius: 3px;
+}
+
+.bar-fill.ok { background: var(--nx-ok); }
+.bar-fill.warn { background: var(--nx-warn); }
+.bar-fill.low { background: var(--nx-low); }
+
+.row-note,
+.muted {
+    color: var(--vscode-descriptionForeground);
+}
+
+.row-note,
+.small {
+    font-size: 10.5px;
+}
+
+.pad { padding: 8px 0; }
+
+.notice strong {
+    display: block;
+    margin-bottom: 3px;
+}
+
+.section-label {
+    margin: 14px 0 6px 2px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--vscode-descriptionForeground);
+}
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.btn {
+    padding: 4px 9px;
+    border: 1px solid var(--vscode-button-border, transparent);
+    border-radius: 3px;
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    cursor: pointer;
+}
+
+.btn:hover { background: var(--vscode-button-secondaryHoverBackground); }
+
+.btn.primary {
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+}
+
+.btn.primary:hover { background: var(--vscode-button-hoverBackground); }
+.btn.danger { color: var(--vscode-errorForeground); }
+
+.btn.wide {
+    width: 100%;
+    margin-top: 4px;
+}
+
+footer {
+    margin-top: 12px;
+    text-align: center;
+}
+
+.dot.cx { background: var(--nx-cx); }
+.badge.cx { background: var(--nx-cx); color: var(--vscode-editor-background); }
+
+.icon-btn.dim { opacity: 0.45; }
+
+.models { opacity: 0.85; }
+
+.spark-wrap {
+    height: 18px;
+    margin-top: 3px;
+}
+
+.spark {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+
+.spark polyline {
+    fill: none;
+    stroke: var(--vscode-charts-blue, #3794ff);
+    stroke-width: 1.5;
+}
+
+.link {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--vscode-textLink-foreground);
+    cursor: pointer;
+    font-size: inherit;
+}
+
+.link:hover { text-decoration: underline; }
