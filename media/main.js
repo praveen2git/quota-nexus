@@ -81,15 +81,17 @@
             spark(p.spark));
     }
 
-    function usedRow(w) {
+    // Limits read as "left", same as Antigravity pools.
+    function limitRow(w) {
         let reset = '';
-        if (w.estimated) reset = 'Reset time has passed - likely reset';
+        if (w.estimated) reset = 'Reset time has passed - likely full';
+        else if (w.left >= 100) reset = 'Full';
         else if (w.countdown) reset = `Resets in ${w.countdown} (${w.wall})`;
         return h('div', { class: 'row' },
             h('div', { class: 'row-head' },
                 h('span', { class: 'row-name' }, `${w.name} limit`),
-                h('span', { class: 'row-pct' }, `${w.estimated ? '~' : ''}${w.pct}% used`)),
-            bar(w.pct, level(100 - w.pct)),
+                h('span', { class: 'row-pct' }, `${w.estimated ? '~' : ''}${w.left}% left`)),
+            bar(w.left, level(w.left)),
             notes(reset, w.forecast),
             spark(w.spark));
     }
@@ -139,12 +141,12 @@
 
     function toolCard(id, title, dotCls, badges, wins, context, footer) {
         const open = expanded.has(id);
-        const sum = wins.map(w => h('span', null, `${w.name} ${w.pct}%`));
+        const sum = wins.map(w => h('span', null, `${w.name} ${w.estimated ? '~' : ''}${w.left}% left`));
         if (context) sum.push(h('span', null, `ctx ${Math.round(context.pct)}%`));
         return h('section', { class: 'card' },
             cardHeader(id, h('span', null, h('span', { class: `dot ${dotCls}` }), title), badges),
             h('div', { class: 'summary' }, sum),
-            open ? h('div', { class: 'details' }, wins.map(usedRow), context ? contextRow(context) : null, footer) : null);
+            open ? h('div', { class: 'details' }, wins.map(limitRow), context ? contextRow(context) : null, footer) : null);
     }
 
     function otherCard(a) {
@@ -192,8 +194,10 @@
             body.push(toolCard('claude', 'Claude Code', 'cc', [badge('CLI', 'cc')], s.claude.windows, s.claude.context, extra));
         }
         if (s.codex.show) {
-            const info = [s.codex.credits, s.codex.windows.length ? `Limits as of ${s.codex.asOfAgo}` : ''].filter(Boolean).join(' · ');
-            body.push(toolCard('codex', 'Codex', 'cx', [badge(s.codex.plan, 'plan'), badge('CLI', 'cx')], s.codex.windows, s.codex.context,
+            const info = s.codex.idle
+                ? `Codex not used for ${s.codex.lastUsedAgo.replace(/ ago$/, '')}. Hidden from the status bar until it runs again.`
+                : [s.codex.credits, s.codex.windows.length ? `Limits as of ${s.codex.asOfAgo}` : ''].filter(Boolean).join(' · ');
+            body.push(toolCard('codex', 'Codex', 'cx', [badge(s.codex.idle ? 'Idle' : '', 'plan'), badge(s.codex.plan, 'plan'), badge('CLI', 'cx')], s.codex.windows, s.codex.context,
                 info ? h('div', { class: 'muted small' }, info) : null));
         }
         body.push(h('div', { class: 'section-label' }, `Other Antigravity accounts (${s.others.length})`));

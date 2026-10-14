@@ -3,6 +3,8 @@
 const { formatCountdown, formatWallClock, formatAgo, maskEmail } = require('./util');
 const { forecast, sparkline } = require('./history');
 
+const IDLE_MS = 7 * 24 * 3600e3;
+
 const seriesId = {
     ag: (email, poolId) => `ag:${String(email).toLowerCase()}:${poolId}`,
     cc: id => `cc:${id}`,
@@ -50,6 +52,7 @@ function usedView(w, now, mayBeStale, points) {
         id: w.id,
         name: w.name,
         pct,
+        left: 100 - pct,
         estimated: resetPassed,
         countdown: resetPassed ? '' : formatCountdown(w.resetsAt, now),
         wall: resetPassed ? '' : formatWallClock(w.resetsAt, now),
@@ -114,19 +117,24 @@ function buildViewState(input) {
     const cx = input.codex || {};
     const cxData = cx.enabled ? cx.data : null;
     const lim = cxData && cxData.limits;
+    const lastUsed = Math.max((lim && lim.at) || 0, (cxData && cxData.context && cxData.context.timestamp) || 0);
     const codex = {
         enabled: !!cx.enabled,
         context: cxData ? cxData.context : null,
         windows: codexWindows(lim).map(w => usedView(w, now, true, hist(seriesId.cx(w.id)))),
         plan: lim ? lim.plan : '',
         credits: lim ? lim.credits : null,
-        asOfAgo: lim ? formatAgo(lim.at, now) : ''
+        asOfAgo: lim ? formatAgo(lim.at, now) : '',
+        // Codex only writes limits while it runs; old data stays off the status bar.
+        idle: !!lastUsed && now - lastUsed > IDLE_MS,
+        lastUsedAgo: lastUsed ? formatAgo(lastUsed, now) : ''
     };
     codex.show = codex.enabled && !!(codex.context || codex.windows.length);
 
     const lefts = [];
     if (active) lefts.push(...active.pools.map(p => p.pct));
-    lefts.push(...ccWins.map(w => 100 - w.pct), ...codex.windows.map(w => 100 - w.pct));
+    lefts.push(...ccWins.map(w => w.left));
+    if (!codex.idle) lefts.push(...codex.windows.map(w => w.left));
 
     return {
         mask,
@@ -141,4 +149,4 @@ function buildViewState(input) {
     };
 }
 
-module.exports = { buildViewState, seriesId, claudeWindows, codexWindows };
+module.exports = { buildViewState, seriesId, claudeWindows, codexWindows, IDLE_MS };

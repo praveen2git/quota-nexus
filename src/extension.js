@@ -11,7 +11,7 @@ const { CodexReader } = require('./codex');
 const { Accounts } = require('./accounts');
 const { evaluateAlerts } = require('./alerts');
 const { History } = require('./history');
-const { buildViewState, seriesId, claudeWindows, codexWindows } = require('./viewState');
+const { buildViewState, seriesId, claudeWindows, codexWindows, IDLE_MS } = require('./viewState');
 const { StatusBar } = require('./statusBar');
 const { DashboardProvider } = require('./webview');
 const { maskEmail, formatCountdown, formatAgo } = require('./util');
@@ -177,7 +177,7 @@ class Nexus {
             this.runAlerts('claudeCode', usedToPools(claudeWindows(this.ccUsage), 'Claude Code'), []);
         }
         const lim = cfg.get('codex.enable', true) && this.codexData && this.codexData.limits;
-        if (lim) {
+        if (lim && Date.now() - (lim.at || 0) <= IDLE_MS) {
             const fresh = codexWindows(lim).filter(w => !(Date.parse(w.resetsAt || '') <= Date.now()));
             this.runAlerts('codex', usedToPools(fresh, 'Codex'), []);
         }

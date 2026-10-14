@@ -137,9 +137,21 @@ test('view state builds Codex and Claude windows with stale handling', () => {
             { name: '5-hour', pct: 90, resetsAt: '2026-10-14T09:00:00Z' }
         ], plan: 'plus', credits: null, at: NOW - 3600e3 } } }
     });
-    assert.deepStrictEqual(v.claude.windows.map(w => [w.id, w.pct]), [['cc-5h', 30], ['cc-wk', 70]]);
-    assert.deepStrictEqual(v.codex.windows.map(w => [w.id, w.pct, w.estimated]), [['cx-30-day', 34, false], ['cx-5-hour', 0, true]]);
+    assert.deepStrictEqual(v.claude.windows.map(w => [w.id, w.pct, w.left]), [['cc-5h', 30, 70], ['cc-wk', 70, 30]]);
+    assert.deepStrictEqual(v.codex.windows.map(w => [w.id, w.left, w.estimated]), [['cx-30-day', 66, false], ['cx-5-hour', 100, true]]);
     assert.strictEqual(v.codex.show, true);
+    assert.strictEqual(v.codex.idle, false);
     assert.strictEqual(v.codex.asOfAgo, '1h ago');
     assert.strictEqual(v.minPct, 30);
+});
+
+test('Codex unused for over 7 days is idle and leaves the minimum alone', () => {
+    const v = buildViewState({
+        now: NOW, connected: false, accounts: [],
+        codex: { enabled: true, data: { context: null, limits: { windows: [{ name: '30-day', pct: 95, resetsAt: '2026-11-20T00:00:00Z' }], plan: 'go', credits: null, at: NOW - 37 * 24 * 3600e3 } } }
+    });
+    assert.strictEqual(v.codex.idle, true);
+    assert.strictEqual(v.codex.lastUsedAgo, '37d ago');
+    assert.strictEqual(v.codex.show, true, 'still on the dashboard');
+    assert.strictEqual(v.minPct, null, 'idle Codex must not colour the status bar');
 });

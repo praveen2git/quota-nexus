@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.2.2] - 2026-10-14
+
+### Changed
+- **Every percentage now shows what is left**, for all three tools. Claude Code and Codex used to show "used" while Antigravity showed "left". The status bar, hover table and dashboard now all count down, matching the yellow and red warnings. Descriptive labels say "left" after each tool.
+- **Idle Codex is hidden.** If Codex has not run for 7 days, its limits and context leave the status bar, and its stale numbers no longer raise alerts or colour the status bar. The dashboard still shows the card, marked Idle, with when it was last used.
+
 ## [1.2.1] - 2026-10-14
 
 ### Fixed

@@ -27,20 +27,21 @@ function stripIcons(s) {
     return String(s || '').replace(/\$\(/g, '$ (');
 }
 
+// Every percentage in the status bar is what is LEFT, so colours and numbers agree.
 function poolsText(pools, format) {
     if (format === 'minimal') return pools.map(p => `${p.short} ${p.pct}%`).join(' | ');
     if (format === 'compact') return 'AG: ' + pools.map(p => `${p.short} ${p.pct}%`).join(' · ');
-    return 'Antigravity: ' + pools.map(p => `${p.name} ${p.pct}%`).join(' · ');
+    return 'Antigravity: ' + pools.map(p => `${p.name} ${p.pct}%`).join(' · ') + ' left';
 }
 
-// Used-limit windows: first is the short window, the rest prefixed by name.
-function usedText(tool, windows, format) {
+// Limit windows: first is the short window, the rest prefixed by name.
+function leftText(tool, windows, format) {
     const name = { CC: 'Claude Code', CX: 'Codex' }[tool];
-    const pct = w => `${w.estimated ? '~' : ''}${w.pct}%`;
+    const pct = w => `${w.estimated ? '~' : ''}${w.left}%`;
     const body = windows.map((w, i) => (i === 0 ? pct(w) : `${w.name === 'Weekly' ? 'wk' : w.name} ${pct(w)}`)).join(' · ');
     if (format === 'minimal') return `${tool} ${body}`;
     if (format === 'compact') return `${tool}: ${body}`;
-    return `${name}: ${body}`;
+    return `${name}: ${body} left`;
 }
 
 function forecastLines(md, items) {
@@ -48,12 +49,12 @@ function forecastLines(md, items) {
     if (lines.length) md.appendMarkdown(lines.join('\n') + '\n\n');
 }
 
-function usedTable(md, title, windows, note) {
+function leftTable(md, title, windows, note) {
     md.appendMarkdown(`---\n\n### ${title}\n\n`);
     if (note) md.appendMarkdown(`${esc(note)}\n\n`);
-    md.appendMarkdown('| Window | | Used | Resets |\n|:--|:--|--:|--:|\n');
+    md.appendMarkdown('| Window | | Left | Resets |\n|:--|:--|--:|--:|\n');
     for (const w of windows) {
-        md.appendMarkdown(`| **${esc(w.name)}** | ${textBar(w.pct)} | ${w.estimated ? '~' : ''}${w.pct}% | ${esc(resetText(w, false))} |\n`);
+        md.appendMarkdown(`| **${esc(w.name)}** | ${textBar(w.left)} | ${w.estimated ? '~' : ''}${w.left}% | ${esc(resetText(w, w.left >= 100 && !w.estimated))} |\n`);
     }
     md.appendMarkdown('\n');
     forecastLines(md, windows);
@@ -94,8 +95,8 @@ class StatusBar {
         if (!opt.show) return item.hide();
         const parts = [];
         if (v.active && v.active.pools.length) parts.push(poolsText(v.active.pools, opt.format));
-        if (opt.showClaudeUsage && v.claude.windows.length) parts.push(usedText('CC', v.claude.windows, opt.format));
-        if (opt.showCodexUsage && v.codex.windows.length) parts.push(usedText('CX', v.codex.windows, opt.format));
+        if (opt.showClaudeUsage && v.claude.windows.length) parts.push(leftText('CC', v.claude.windows, opt.format));
+        if (opt.showCodexUsage && v.codex.windows.length && !v.codex.idle) parts.push(leftText('CX', v.codex.windows, opt.format));
         const prefix = opt.showEmail && v.active ? `${stripIcons(v.active.display)} | ` : '';
         item.text = parts.length ? `$(dashboard) ${prefix}${stripIcons(parts.join(' | '))}` : '$(dashboard) Quota Nexus';
 
@@ -117,12 +118,14 @@ class StatusBar {
         } else {
             md.appendMarkdown('### Antigravity not detected\n\nStart `agy` or the Antigravity IDE and Quota Nexus will connect.\n\n');
         }
-        if (v.claude.windows.length) usedTable(md, 'Claude Code limits', v.claude.windows, '');
-        if (v.codex.windows.length) {
+        if (v.claude.windows.length) leftTable(md, 'Claude Code limits', v.claude.windows, '');
+        if (v.codex.windows.length && !v.codex.idle) {
             const note = [v.codex.plan && `Plan: ${v.codex.plan}`, v.codex.credits, `as of ${v.codex.asOfAgo}`].filter(Boolean).join(' · ');
-            usedTable(md, 'Codex limits', v.codex.windows, note);
+            leftTable(md, 'Codex limits', v.codex.windows, note);
+        } else if (v.codex.idle) {
+            md.appendMarkdown(`---\n\n*Codex not used for ${esc(v.codex.lastUsedAgo.replace(/ ago$/, ''))} - hidden until it runs again.*\n\n`);
         }
-        md.appendMarkdown(`*Updated ${esc(v.updatedAgo)}* · ${FOOTER}`);
+        md.appendMarkdown(`*Percentages show what is left. Updated ${esc(v.updatedAgo)}.* · ${FOOTER}`);
         item.tooltip = md;
         item.show();
     }
@@ -132,7 +135,7 @@ class StatusBar {
         const all = {
             antigravity: opt.showAgContext ? v.agContext : null,
             claudeCode: opt.showCcContext ? v.claude.context : null,
-            codex: opt.showCxContext ? v.codex.context : null
+            codex: opt.showCxContext && !v.codex.idle ? v.codex.context : null
         };
         const mode = opt.contextDisplay;
         const byRecency = Object.values(all).filter(Boolean).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));

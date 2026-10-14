@@ -2,7 +2,7 @@
   "name": "quota-nexus",
   "displayName": "Quota Nexus - AI Usage & Context Monitor",
   "description": "Unofficial AI usage monitor for Antigravity, Claude Code and Codex: quota, rate limits, token usage, reset times and context window in your status bar. Alerts, forecasts and history. Local-first, stores no sign-in tokens.",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "publisher": "quota-nexus",
   "license": "MIT",
   "engines": {
@@ -166,9 +166,9 @@
           "order": 2,
           "enum": ["descriptive", "compact", "minimal"],
           "enumDescriptions": [
-            "Antigravity: Gemini 100% · Claude / GPT-OSS 22% | Claude Code: 3% · wk 76% | Codex: 34%",
-            "AG: Gem 100% · Cl/GPT 22% | CC: 3% · wk 76% | CX: 34%",
-            "Gem 100% | Cl/GPT 22% | CC 3% · wk 76% | CX 34%"
+            "Antigravity: Gemini 100% · Claude / GPT-OSS 22% left | Claude Code: 97% · wk 24% left | Codex: 66% left",
+            "AG: Gem 100% · Cl/GPT 22% | CC: 97% · wk 24% | CX: 66%",
+            "Gem 100% | Cl/GPT 22% | CC 97% · wk 24% | CX 66%"
           ],
           "description": "Label style for the status bar."
         },

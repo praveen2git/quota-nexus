@@ -24,7 +24,7 @@ See how much AI quota you have left, when it resets and when you will run out, f
 
 ## Features
 
-- **One status bar for three tools.** For example: `Antigravity: Gemini 100% · Claude / GPT-OSS 22% | Claude Code: 3% · wk 76% | Codex: 34%`. It turns yellow, then red, as anything runs low.
+- **One status bar for three tools.** For example: `Antigravity: Gemini 100% · Claude / GPT-OSS 22% left | Claude Code: 97% · wk 24% left | Codex: 66% left`. Every number is what is left, and it turns yellow, then red, as anything runs low.
 - **Run-out forecast.** Nexus tracks your burn rate and tells you "At this pace it runs out in 2h 10m (3:40 PM)" or "lasts until the reset".
 - **24-hour history.** A small chart per quota shows how fast you used it.
 - **Smart alerts.** You get a notification at 20% and 5% left (you can change the levels), and another when a quota resets. When one Antigravity pool is low, it suggests a pool that still has room. Snooze alerts for an hour with one click.
@@ -112,7 +112,7 @@ Nexus detects the new account within one refresh.
 
 - Antigravity and Claude Code context window sizes are estimates. Codex reports its own.
 - Inactive Antigravity accounts are not polled. Their numbers are the last values seen while they were active.
-- Codex limits update only when Codex runs.
+- Codex limits update only when Codex runs. After 7 days without Codex activity they leave the status bar (the dashboard still shows them, marked Idle).
 - Claude Code limits use an undocumented endpoint that may change.
 - Forecasts need about 15 minutes of history before they appear.
 
