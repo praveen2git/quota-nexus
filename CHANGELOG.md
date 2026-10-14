@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.4] - 2026-10-14
+
+### Fixed
+- The 24-hour chart in the dashboard follows Percent Mode: in `used` mode the line rises as you use quota, matching the bars.
+
+### Changed
+- New README screenshots of the hover, the context window and the dashboard.
+
 ## [1.2.3] - 2026-10-14
 
 ### Added

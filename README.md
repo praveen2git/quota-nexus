@@ -9,13 +9,17 @@ See how much AI quota you have left, when it resets and when you will run out, f
 
 > **Unofficial.** Not affiliated with, endorsed by or sponsored by Google, Anthropic or OpenAI. "Antigravity", "Gemini", "Claude" and "Codex" are trademarks of their owners.
 
-**Status bar and hover details**
+**Hover details:** quota pools and limits, with used and left side by side, reset times and a run-out forecast.
 
-![Status bar with the hover tooltip showing Antigravity pools and Codex limits](images/status-bar.png)
+![Hover showing Antigravity pools and Claude Code 5-hour and weekly limits](images/hover.png)
+
+**Context window:** how full each active session is.
+
+![Hover showing the Claude Code context window: tokens used, from cache and left](images/context.png)
 
 **Dashboard**
 
-![Quota Nexus dashboard with Antigravity pools, Claude Code and Codex cards](images/dashboard.png)
+![Quota Nexus dashboard with the Antigravity account, its pools and models, and the Claude Code card](images/dashboard.png)
 
 ## Install
 

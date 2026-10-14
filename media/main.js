@@ -46,9 +46,10 @@
         return h('div', { class: 'bar', role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuenow': Math.round(pct) }, fill);
     }
 
-    // points: [[x 0..100, y 0..100]] where y is percent used.
+    // points: [[x 0..100, y 0..100]], y = 100 - left (SVG top = full); flipped in used mode.
     function spark(points) {
         if (!points || points.length < 2) return null;
+        if (mode() === 'used') points = points.map(([x, y]) => [x, 100 - y]);
         const svg = document.createElementNS(SVG_NS, 'svg');
         svg.setAttribute('viewBox', '0 0 100 100');
         svg.setAttribute('preserveAspectRatio', 'none');
