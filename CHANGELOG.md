@@ -5,6 +5,7 @@
 ### Changed
 - Antigravity model ids show as readable names (for example `gemini-3.8-flash-n` is now "Gemini 3.8 Flash").
 - Clearer Marketplace description and more search keywords (usage limits, rate limits, token usage, AI usage).
+- License holder is now "Quota Nexus" (was a leftover from 1.0).
 
 ## [1.2.0] - 2026-10-14
 
