@@ -1,8 +1,26 @@
 # Quota Nexus
 
+[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/quota-nexus.quota-nexus?label=VS%20Code%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=quota-nexus.quota-nexus)
+[![Installs](https://img.shields.io/visual-studio-marketplace/i/quota-nexus.quota-nexus)](https://marketplace.visualstudio.com/items?itemName=quota-nexus.quota-nexus)
+[![Open VSX](https://img.shields.io/open-vsx/v/quota-nexus/quota-nexus?label=Open%20VSX)](https://open-vsx.org/extension/quota-nexus/quota-nexus)
+[![CI](https://github.com/praveen2git/quota-nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/praveen2git/quota-nexus/actions/workflows/ci.yml)
+
 See how much AI quota you have left, when it resets and when you will run out, for **Antigravity**, **Claude Code** and **Codex**, right in your status bar.
 
 > **Unofficial.** Not affiliated with, endorsed by or sponsored by Google, Anthropic or OpenAI. "Antigravity", "Gemini", "Claude" and "Codex" are trademarks of their owners.
+
+**Status bar and hover details**
+
+![Status bar with the hover tooltip showing Antigravity pools and Codex limits](images/status-bar.png)
+
+**Dashboard**
+
+![Quota Nexus dashboard with Antigravity pools, Claude Code and Codex cards](images/dashboard.png)
+
+## Install
+
+- **VS Code:** search "Quota Nexus" in the Extensions view, or run `code --install-extension quota-nexus.quota-nexus`.
+- **Antigravity IDE, Cursor, Windsurf, VSCodium:** search "Quota Nexus" in the Extensions view (served from [Open VSX](https://open-vsx.org/extension/quota-nexus/quota-nexus)).
 
 ## Features
 

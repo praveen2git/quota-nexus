@@ -3,8 +3,9 @@
     --nx-ok: var(--vscode-charts-green, #3fb950);
     --nx-warn: var(--vscode-charts-yellow, #d29922);
     --nx-low: var(--vscode-charts-red, #f85149);
-    --nx-cc: var(--vscode-charts-orange, #f59e0b);
-    --nx-cx: var(--vscode-charts-blue, #3794ff);
+    /* Fixed tool colours: some themes map chart colours to grey. */
+    --nx-cc: #e8833a;
+    --nx-cx: #3794ff;
     --nx-border: var(--vscode-widget-border, var(--vscode-panel-border, rgba(128, 128, 128, 0.35)));
     --nx-card: var(--vscode-sideBarSectionHeader-background, rgba(128, 128, 128, 0.08));
 }

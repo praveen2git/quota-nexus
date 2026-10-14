@@ -3,6 +3,17 @@
 const { contextWindowFor, formatTokens, pathsOverlap } = require('./util');
 
 const SHORT = { gemini: 'Gem', claude: 'Cl', 'gpt-oss': 'GPT' };
+// The server lists models in a varying order; sort so pool names and ids stay stable.
+const FAMILY_ORDER = ['gemini', 'claude', 'gpt-oss'];
+
+function familyRank(f) {
+    const i = FAMILY_ORDER.indexOf(f.toLowerCase());
+    return i < 0 ? FAMILY_ORDER.length : i;
+}
+
+function byFamily(a, b) {
+    return familyRank(a) - familyRank(b) || a.localeCompare(b);
+}
 
 function familyOf(label) {
     return String(label || 'Other').trim().split(/\s+/)[0] || 'Other';
@@ -69,9 +80,10 @@ function parseUserStatus(raw) {
     }
 
     const pools = [...groups.values()].map(g => {
-        const families = [...new Set(g.models.map(familyOf))];
-        return { ...g, families, name: families.join(' / '), short: families.map(shortOf).join('/') };
-    });
+        const models = g.models.slice().sort((a, b) => a.localeCompare(b));
+        const families = [...new Set(models.map(familyOf))].sort(byFamily);
+        return { ...g, models, families, name: families.join(' / '), short: families.map(shortOf).join('/') };
+    }).sort((a, b) => byFamily(a.families[0], b.families[0]) || a.name.localeCompare(b.name) || a.models[0].localeCompare(b.models[0]));
     const nameCount = {};
     for (const p of pools) nameCount[p.name] = (nameCount[p.name] || 0) + 1;
     const usedIds = new Set();

@@ -38,12 +38,20 @@ test('parseUserStatus groups models into quota pools', () => {
     assert.deepStrictEqual(s.credits.prompt, { available: 49000, monthly: 50000 });
 });
 
+test('parseUserStatus gives the same pools whatever order the server uses', () => {
+    const rows = SAMPLE.userStatus.cascadeModelConfigData.clientModelConfigs;
+    const flipped = { userStatus: { ...SAMPLE.userStatus, cascadeModelConfigData: { clientModelConfigs: rows.slice().reverse() } } };
+    const view = s => s.pools.map(x => [x.id, x.name, x.short, x.models.join('|')]);
+    assert.deepStrictEqual(view(p.parseUserStatus(flipped)), view(p.parseUserStatus(SAMPLE)));
+    assert.strictEqual(p.parseUserStatus(flipped).pools[1].name, 'Claude / GPT-OSS');
+});
+
 test('parseUserStatus names same-family pools apart', () => {
     const s = p.parseUserStatus({ userStatus: { cascadeModelConfigData: { clientModelConfigs: cfgs([
         ['Gemini 3.8 Flash (High)', 0.5, 'a'],
         ['Gemini 3.1 Pro (High)', 0.9, 'b']
     ]) } } });
-    assert.deepStrictEqual(s.pools.map(x => x.name), ['Gemini 3.8 Flash', 'Gemini 3.1 Pro']);
+    assert.deepStrictEqual(s.pools.map(x => x.name), ['Gemini 3.1 Pro', 'Gemini 3.8 Flash']);
     assert.strictEqual(new Set(s.pools.map(x => x.id)).size, 2);
 });
 

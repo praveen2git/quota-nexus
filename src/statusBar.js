@@ -36,7 +36,8 @@ function poolsText(pools, format) {
 // Used-limit windows: first is the short window, the rest prefixed by name.
 function usedText(tool, windows, format) {
     const name = { CC: 'Claude Code', CX: 'Codex' }[tool];
-    const body = windows.map((w, i) => (i === 0 ? `${w.pct}%` : `${w.name === 'Weekly' ? 'wk' : w.name} ${w.pct}%`)).join(' · ');
+    const pct = w => `${w.estimated ? '~' : ''}${w.pct}%`;
+    const body = windows.map((w, i) => (i === 0 ? pct(w) : `${w.name === 'Weekly' ? 'wk' : w.name} ${pct(w)}`)).join(' · ');
     if (format === 'minimal') return `${tool} ${body}`;
     if (format === 'compact') return `${tool}: ${body}`;
     return `${name}: ${body}`;

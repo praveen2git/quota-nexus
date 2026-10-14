@@ -10,7 +10,7 @@ const FALLBACK_DIRS = 5;
 const MAX_BODY_BYTES = 1024 * 1024;
 // A workspace session older than this loses to the newest session anywhere.
 const FRESH_MS = 12 * 3600e3;
-const USER_AGENT = 'quota-nexus/1.2.0';
+const USER_AGENT = `quota-nexus/${require('../package.json').version}`;
 
 // Claude Code names each project folder after its cwd with non-alphanumerics as '-'.
 function encodeProjectDir(p) {

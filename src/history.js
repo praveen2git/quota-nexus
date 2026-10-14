@@ -71,10 +71,13 @@ function forecast(points, pctLeft, resetTime, now = Date.now()) {
     return { status: 'runsOut', at: runOutAt };
 }
 
-// Last 24h, normalised to a 100 x 100 box for a sparkline.
+const SPARK_MIN_POINTS = 4;
+const SPARK_MIN_SPAN_MS = 2 * 3600e3;
+
+// Last 24h, normalised to a 100 x 100 box; hidden until there is enough to draw a trend.
 function sparkline(points, now = Date.now(), spanMs = 24 * 3600e3, maxPoints = 60) {
     const recent = points.filter(p => now - p[0] <= spanMs);
-    if (recent.length < 2) return null;
+    if (recent.length < SPARK_MIN_POINTS || recent[recent.length - 1][0] - recent[0][0] < SPARK_MIN_SPAN_MS) return null;
     const step = Math.max(1, Math.ceil(recent.length / maxPoints));
     const picked = recent.filter((_, i) => i % step === 0 || i === recent.length - 1);
     return picked.map(([t, v]) => [Math.round(((t - (now - spanMs)) / spanMs) * 1000) / 10, Math.round(100 - v)]);

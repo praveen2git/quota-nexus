@@ -1,9 +1,16 @@
 # Changelog
 
-## [Unreleased]
+## [1.2.1] - 2026-10-14
+
+### Fixed
+- Antigravity pool names and order no longer flip between refreshes ("GPT-OSS / Claude" vs "Claude / GPT-OSS"). This also keeps each pool's history and alert state in one place.
+- The 24-hour chart stays hidden until it has at least 2 hours of data, instead of drawing a stray dash.
+- Claude Code and Codex colours no longer turn grey in themes that map chart colours to grey.
+- Estimated Codex limits show `~` in the status bar too (for example `Codex: ~0%`).
+- Antigravity model ids show as readable names (for example `gemini-3.8-flash-n` is now "Gemini 3.8 Flash").
 
 ### Changed
-- Antigravity model ids show as readable names (for example `gemini-3.8-flash-n` is now "Gemini 3.8 Flash").
+- README now has screenshots, install steps for VS Code and Open VSX, and badges.
 - Clearer Marketplace description and more search keywords (usage limits, rate limits, token usage, AI usage).
 - License holder is now "Quota Nexus" (was a leftover from 1.0).
 

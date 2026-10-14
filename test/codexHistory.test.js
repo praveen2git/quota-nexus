@@ -121,9 +121,11 @@ test('currentSegment starts after the last reset', () => {
 });
 
 test('sparkline maps the last 24h into a 100x100 box', () => {
-    const s = sparkline([[NOW - 48 * 3600e3, 10], [NOW - 12 * 3600e3, 80], [NOW, 20]], NOW);
-    assert.deepStrictEqual(s, [[50, 20], [100, 80]]);
+    const H = 3600e3;
+    const s = sparkline([[NOW - 48 * H, 10], [NOW - 12 * H, 80], [NOW - 6 * H, 70], [NOW - 3 * H, 60], [NOW, 20]], NOW);
+    assert.deepStrictEqual(s, [[50, 20], [75, 30], [87.5, 40], [100, 80]]);
     assert.strictEqual(sparkline([[NOW, 1]], NOW), null);
+    assert.strictEqual(sparkline([[NOW - 3 * MIN, 9], [NOW - 2 * MIN, 8], [NOW - MIN, 7], [NOW, 6]], NOW), null, 'too short a span');
 });
 
 test('view state builds Codex and Claude windows with stale handling', () => {
