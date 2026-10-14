@@ -1,7 +1,7 @@
 # Quota Nexus
 
-[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/quota-nexus.quota-nexus?label=VS%20Code%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=quota-nexus.quota-nexus)
-[![Installs](https://img.shields.io/visual-studio-marketplace/i/quota-nexus.quota-nexus)](https://marketplace.visualstudio.com/items?itemName=quota-nexus.quota-nexus)
+[![VS Code Marketplace](https://vsmarketplacebadges.dev/version-short/quota-nexus.quota-nexus.svg?label=VS%20Code%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=quota-nexus.quota-nexus)
+[![Installs](https://vsmarketplacebadges.dev/installs-short/quota-nexus.quota-nexus.svg?label=Installs)](https://marketplace.visualstudio.com/items?itemName=quota-nexus.quota-nexus)
 [![Open VSX](https://img.shields.io/open-vsx/v/quota-nexus/quota-nexus?label=Open%20VSX)](https://open-vsx.org/extension/quota-nexus/quota-nexus)
 [![CI](https://github.com/praveen2git/quota-nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/praveen2git/quota-nexus/actions/workflows/ci.yml)
 
