@@ -1,7 +1,7 @@
 {
   "name": "quota-nexus",
   "displayName": "Quota Nexus - AI Usage & Context Monitor",
-  "description": "Unofficial quota, reset-time and context-window monitor for Antigravity, Claude Code and Codex. Alerts, forecasts and history. Read-only, local-first, stores no sign-in tokens.",
+  "description": "Unofficial AI usage monitor for Antigravity, Claude Code and Codex: quota, rate limits, token usage, reset times and context window in your status bar. Alerts, forecasts and history. Local-first, stores no sign-in tokens.",
   "version": "1.2.0",
   "publisher": "quota-nexus",
   "license": "MIT",
@@ -28,15 +28,30 @@
   ],
   "keywords": [
     "quota",
+    "quota monitor",
     "usage",
+    "usage limits",
+    "usage tracker",
+    "ai usage",
+    "ai monitor",
     "rate limit",
+    "rate limits",
+    "token usage",
+    "tokens",
+    "limits",
     "context window",
+    "forecast",
     "antigravity",
     "agy",
-    "claude code",
-    "codex",
     "gemini",
-    "status bar"
+    "claude",
+    "claude code",
+    "anthropic",
+    "codex",
+    "openai",
+    "gpt",
+    "status bar",
+    "dashboard"
   ],
   "activationEvents": [
     "onStartupFinished"
