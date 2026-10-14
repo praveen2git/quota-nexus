@@ -2,7 +2,7 @@
   "name": "quota-nexus",
   "displayName": "Quota Nexus - AI Usage & Context Monitor",
   "description": "Unofficial AI usage monitor for Antigravity, Claude Code and Codex: quota, rate limits, token usage, reset times and context window in your status bar. Alerts, forecasts and history. Local-first, stores no sign-in tokens.",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "publisher": "quota-nexus",
   "license": "MIT",
   "engines": {
@@ -166,11 +166,22 @@
           "order": 2,
           "enum": ["descriptive", "compact", "minimal"],
           "enumDescriptions": [
-            "Antigravity: Gemini 100% · Claude / GPT-OSS 22% left | Claude Code: 97% · wk 24% left | Codex: 66% left",
-            "AG: Gem 100% · Cl/GPT 22% | CC: 97% · wk 24% | CX: 66%",
-            "Gem 100% | Cl/GPT 22% | CC 97% · wk 24% | CX 66%"
+            "Antigravity: Gemini 0% · Claude / GPT-OSS 78% used | Claude Code: 3% · wk 76% used | Codex: 34% used",
+            "AG: Gem 0%↑ · Cl/GPT 78%↑ | CC: 3%↑ · wk 76%↑ | CX: 34%↑",
+            "Gem 0%↑ | Cl/GPT 78%↑ | CC 3%↑ · wk 76%↑ | CX 34%↑"
           ],
-          "description": "Label style for the status bar."
+          "description": "Label style for the status bar. Compact and minimal mark each number with ↑ (used) or ↓ (left)."
+        },
+        "quotaNexus.display.percentMode": {
+          "type": "string",
+          "default": "used",
+          "order": 3,
+          "enum": ["used", "left"],
+          "enumDescriptions": [
+            "Show what is used, counting up to 100%, like the Claude Code and Codex screens (for example 57% used)",
+            "Show what is left, counting down to 0% (for example 43% left)"
+          ],
+          "description": "Show quota as percent left or percent used, in the status bar, hover and dashboard. Alerts and colours always work on what is left."
         },
         "quotaNexus.statusBar.showEmail": {
           "type": "boolean",
@@ -223,7 +234,7 @@
           "order": 20,
           "enum": ["auto", "antigravity", "claudeCode", "codex", "all", "off"],
           "enumDescriptions": [
-            "Show the most recently active session",
+            "Show every session used in the last 15 minutes (or the newest one)",
             "Always show Antigravity",
             "Always show Claude Code",
             "Always show Codex",

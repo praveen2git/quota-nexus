@@ -35,6 +35,8 @@ function poolView(p, now, fromSnapshot, points) {
         short: p.short,
         models: [...new Set(p.models || [])],
         pct,
+        left: pct,
+        used: 100 - pct,
         estimated: resetPassed,
         countdown: pct >= 100 ? '' : formatCountdown(p.resetTime, now),
         wall: pct >= 100 ? '' : formatWallClock(p.resetTime, now),
@@ -53,6 +55,7 @@ function usedView(w, now, mayBeStale, points) {
         name: w.name,
         pct,
         left: 100 - pct,
+        used: pct,
         estimated: resetPassed,
         countdown: resetPassed ? '' : formatCountdown(w.resetsAt, now),
         wall: resetPassed ? '' : formatWallClock(w.resetsAt, now),
@@ -71,6 +74,16 @@ function claudeWindows(usage) {
 function codexWindows(limits) {
     if (!limits) return [];
     return limits.windows.map(w => ({ id: `cx-${w.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`, name: w.name, pct: w.pct, resetsAt: w.resetsAt }));
+}
+
+// Reported times can lag (agy summaries); a token change marks the session active now.
+function markActive(seen, c, now) {
+    if (!c) return c;
+    const sig = `${c.model}|${c.usedTokens}`;
+    const prev = seen[c.source];
+    if (!prev) seen[c.source] = { sig, at: 0 };
+    else if (prev.sig !== sig) seen[c.source] = { sig, at: now };
+    return { ...c, timestamp: Math.max(c.timestamp || 0, seen[c.source].at) };
 }
 
 function buildViewState(input) {
@@ -138,7 +151,9 @@ function buildViewState(input) {
 
     return {
         mask,
+        percentMode: input.percentMode === 'left' ? 'left' : 'used',
         connected: !!s,
+        connecting: !s && !!input.connecting,
         active,
         others,
         agContext: s ? (input.agContext || null) : null,
@@ -149,4 +164,4 @@ function buildViewState(input) {
     };
 }
 
-module.exports = { buildViewState, seriesId, claudeWindows, codexWindows, IDLE_MS };
+module.exports = { buildViewState, seriesId, claudeWindows, codexWindows, markActive, IDLE_MS };

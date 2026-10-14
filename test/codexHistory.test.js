@@ -7,7 +7,7 @@ const os = require('os');
 const path = require('path');
 const { CodexReader, parseCodexLines, buildCodexLimits, windowName } = require('../src/codex');
 const { History, forecast, sparkline, currentSegment } = require('../src/history');
-const { buildViewState } = require('../src/viewState');
+const { buildViewState, markActive } = require('../src/viewState');
 
 const NOW = Date.parse('2026-10-14T10:00:00Z');
 const MIN = 60e3;
@@ -137,12 +137,23 @@ test('view state builds Codex and Claude windows with stale handling', () => {
             { name: '5-hour', pct: 90, resetsAt: '2026-10-14T09:00:00Z' }
         ], plan: 'plus', credits: null, at: NOW - 3600e3 } } }
     });
-    assert.deepStrictEqual(v.claude.windows.map(w => [w.id, w.pct, w.left]), [['cc-5h', 30, 70], ['cc-wk', 70, 30]]);
-    assert.deepStrictEqual(v.codex.windows.map(w => [w.id, w.left, w.estimated]), [['cx-30-day', 66, false], ['cx-5-hour', 100, true]]);
+    assert.deepStrictEqual(v.claude.windows.map(w => [w.id, w.used, w.left]), [['cc-5h', 30, 70], ['cc-wk', 70, 30]]);
+    assert.deepStrictEqual(v.codex.windows.map(w => [w.id, w.used, w.left, w.estimated]), [['cx-30-day', 34, 66, false], ['cx-5-hour', 0, 100, true]]);
+    assert.strictEqual(v.percentMode, 'used', 'used is the default');
     assert.strictEqual(v.codex.show, true);
     assert.strictEqual(v.codex.idle, false);
     assert.strictEqual(v.codex.asOfAgo, '1h ago');
     assert.strictEqual(v.minPct, 30);
+});
+
+test('percent mode defaults to used, and pools carry both numbers', () => {
+    const status = { email: 'a@x.com', planName: 'Pro', pools: [{ id: 'g', name: 'Gemini', short: 'Gem', models: [], remainingPct: 22, resetTime: null }] };
+    const base = { now: NOW, connected: true, status, accounts: [] };
+    const v = buildViewState({ ...base, percentMode: 'used' });
+    assert.strictEqual(v.percentMode, 'used');
+    assert.deepStrictEqual([v.active.pools[0].left, v.active.pools[0].used], [22, 78]);
+    assert.strictEqual(v.minPct, 22, 'colours still count what is left');
+    assert.strictEqual(buildViewState({ ...base, percentMode: 'bogus' }).percentMode, 'used');
 });
 
 test('Codex unused for over 7 days is idle and leaves the minimum alone', () => {
@@ -154,4 +165,14 @@ test('Codex unused for over 7 days is idle and leaves the minimum alone', () => 
     assert.strictEqual(v.codex.lastUsedAgo, '37d ago');
     assert.strictEqual(v.codex.show, true, 'still on the dashboard');
     assert.strictEqual(v.minPct, null, 'idle Codex must not colour the status bar');
+});
+
+test('a token change marks a session active even when its reported time lags', () => {
+    const seen = {};
+    const ag = used => ({ source: 'antigravity', model: 'Gemini', usedTokens: used, timestamp: 1000 });
+    assert.strictEqual(markActive(seen, ag(10), 5000).timestamp, 1000, 'first sight keeps the reported time');
+    assert.strictEqual(markActive(seen, ag(10), 6000).timestamp, 1000, 'no change, no bump');
+    assert.strictEqual(markActive(seen, ag(20), 7000).timestamp, 7000, 'tokens grew: active now');
+    assert.strictEqual(markActive(seen, ag(20), 9000).timestamp, 7000);
+    assert.strictEqual(markActive(seen, null, 9000), null);
 });

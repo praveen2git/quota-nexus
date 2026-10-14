@@ -62,6 +62,26 @@
         return h('div', { class: 'spark-wrap', title: 'Last 24 hours' }, svg);
     }
 
+    function mode() {
+        return state && state.percentMode === 'left' ? 'left' : 'used';
+    }
+
+    // x carries both left and used; show the chosen one first.
+    function pctText(x) {
+        const m = mode();
+        return `${x.estimated ? '~' : ''}${x[m]}% ${m}`;
+    }
+
+    function pctHead(x) {
+        const o = mode() === 'used' ? 'left' : 'used';
+        return h('span', { class: 'row-pct' }, pctText(x), h('span', { class: 'muted' }, ` (${x[o]}% ${o})`));
+    }
+
+    function ctxPct(c) {
+        const used = Math.round(c.pct);
+        return { used, left: 100 - used };
+    }
+
     function notes(...lines) {
         return lines.filter(Boolean).map(t => h('div', { class: 'row-note' }, t));
     }
@@ -74,14 +94,13 @@
         return h('div', { class: 'row' },
             h('div', { class: 'row-head' },
                 h('span', { class: 'row-name' }, p.name),
-                h('span', { class: 'row-pct' }, `${p.estimated ? '~' : ''}${p.pct}% left`)),
-            bar(p.pct, level(p.pct)),
+                pctHead(p)),
+            bar(p[mode()], level(p.left)),
             notes(reset, p.forecast),
             withModels && p.models && p.models.length ? h('div', { class: 'row-note models' }, `Models: ${p.models.join(', ')}`) : null,
             spark(p.spark));
     }
 
-    // Limits read as "left", same as Antigravity pools.
     function limitRow(w) {
         let reset = '';
         if (w.estimated) reset = 'Reset time has passed - likely full';
@@ -90,8 +109,8 @@
         return h('div', { class: 'row' },
             h('div', { class: 'row-head' },
                 h('span', { class: 'row-name' }, `${w.name} limit`),
-                h('span', { class: 'row-pct' }, `${w.estimated ? '~' : ''}${w.left}% left`)),
-            bar(w.left, level(w.left)),
+                pctHead(w)),
+            bar(w[mode()], level(w.left)),
             notes(reset, w.forecast),
             spark(w.spark));
     }
@@ -99,11 +118,12 @@
     function contextRow(c) {
         const cls = c.pct >= 95 ? 'low' : c.pct >= 80 ? 'warn' : 'ok';
         const tip = c.pct >= 80 ? (c.source === 'codex' ? 'Nearly full: start a new session or /compact.' : 'Nearly full: /compact to keep going, /clear for a new task.') : '';
+        const n = ctxPct(c);
         return h('div', { class: 'row' },
             h('div', { class: 'row-head' },
                 h('span', { class: 'row-name' }, `Context - ${c.model}`),
-                h('span', { class: 'row-pct' }, `${Math.round(c.pct)}% full`)),
-            bar(c.pct, cls),
+                pctHead(n)),
+            bar(n[mode()], cls),
             notes(`${c.left} tokens left${c.windowExact ? '' : ' (est.)'}`, tip));
     }
 
@@ -132,7 +152,7 @@
         return h('section', { class: 'card active' },
             cardHeader('active', h('span', null, h('span', { class: 'dot on' }), a.display),
                 [badge(a.label, 'label'), badge('Active', 'on'), badge(a.planName, 'plan')]),
-            h('div', { class: 'summary' }, a.pools.map(p => h('span', null, `${p.short} ${p.pct}%`))),
+            h('div', { class: 'summary' }, a.pools.map(p => h('span', null, `${p.short} ${pctText(p)}`))),
             open ? h('div', { class: 'details' },
                 a.pools.length ? a.pools.map(p => poolRow(p, true)) : h('div', { class: 'muted' }, 'No quota data reported.'),
                 s.agContext ? contextRow(s.agContext) : null,
@@ -141,8 +161,8 @@
 
     function toolCard(id, title, dotCls, badges, wins, context, footer) {
         const open = expanded.has(id);
-        const sum = wins.map(w => h('span', null, `${w.name} ${w.estimated ? '~' : ''}${w.left}% left`));
-        if (context) sum.push(h('span', null, `ctx ${Math.round(context.pct)}%`));
+        const sum = wins.map(w => h('span', null, `${w.name} ${pctText(w)}`));
+        if (context) sum.push(h('span', null, `ctx ${Math.round(ctxPct(context)[mode()])}% ${mode()}`));
         return h('section', { class: 'card' },
             cardHeader(id, h('span', null, h('span', { class: `dot ${dotCls}` }), title), badges),
             h('div', { class: 'summary' }, sum),
@@ -155,7 +175,7 @@
         return h('section', { class: 'card' },
             cardHeader(id, h('span', null, h('span', { class: 'dot' }), a.display), [badge(a.label, 'label'), badge(a.planName, 'plan')]),
             h('div', { class: 'summary' },
-                a.pools.length ? a.pools.map(p => h('span', null, `${p.short} ${p.estimated ? '~' : ''}${p.pct}%`)) : h('span', { class: 'muted' }, 'No snapshot yet')),
+                a.pools.length ? a.pools.map(p => h('span', null, `${p.short} ${pctText(p)}`)) : h('span', { class: 'muted' }, 'No snapshot yet')),
             open ? h('div', { class: 'details' },
                 a.pools.map(p => poolRow(p, false)),
                 h('div', { class: 'muted small' }, a.snapshotAgo ? `Last seen ${a.snapshotAgo}. Values update when this account is active.` : 'Sign in once to capture a snapshot.'),
@@ -181,12 +201,6 @@
 
         const body = [];
         if (s.active) body.push(activeCard(s));
-        else {
-            body.push(h('section', { class: 'card notice' },
-                h('strong', null, 'Antigravity not detected'),
-                h('div', { class: 'muted small' }, 'Start agy or the Antigravity IDE. Quota Nexus connects to its local server automatically.'),
-                h('div', { class: 'actions' }, h('button', { class: 'btn', 'data-action': 'diagnostics' }, 'Show diagnostics'))));
-        }
         if (s.claude.show) {
             const extra = s.claude.usageEnabled
                 ? (s.claude.usageError ? h('div', { class: 'muted small' }, s.claude.usageError) : null)
@@ -199,6 +213,15 @@
                 : [s.codex.credits, s.codex.windows.length ? `Limits as of ${s.codex.asOfAgo}` : ''].filter(Boolean).join(' · ');
             body.push(toolCard('codex', 'Codex', 'cx', [badge(s.codex.idle ? 'Idle' : '', 'plan'), badge(s.codex.plan, 'plan'), badge('CLI', 'cx')], s.codex.windows, s.codex.context,
                 info ? h('div', { class: 'muted small' }, info) : null));
+        }
+        // Missing Antigravity goes below the tools that have data.
+        if (!s.active && s.connecting) {
+            body.push(h('section', { class: 'card notice' }, h('div', { class: 'muted small' }, 'Looking for Antigravity...')));
+        } else if (!s.active) {
+            body.push(h('section', { class: 'card notice' },
+                h('strong', null, 'Antigravity not detected'),
+                h('div', { class: 'muted small' }, 'Start agy or the Antigravity IDE. Quota Nexus connects to its local server automatically.'),
+                h('div', { class: 'actions' }, h('button', { class: 'btn', 'data-action': 'diagnostics' }, 'Show diagnostics'))));
         }
         body.push(h('div', { class: 'section-label' }, `Other Antigravity accounts (${s.others.length})`));
         body.push(...s.others.map(otherCard));

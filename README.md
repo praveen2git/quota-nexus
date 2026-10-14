@@ -24,7 +24,8 @@ See how much AI quota you have left, when it resets and when you will run out, f
 
 ## Features
 
-- **One status bar for three tools.** For example: `Antigravity: Gemini 100% · Claude / GPT-OSS 22% left | Claude Code: 97% · wk 24% left | Codex: 66% left`. Every number is what is left, and it turns yellow, then red, as anything runs low.
+- **One status bar for three tools.** For example: `Antigravity: Gemini 0% · Claude / GPT-OSS 78% used | Claude Code: 3% · wk 76% used | Codex: 34% used`. It turns yellow, then red, as anything runs low.
+- **Used or left, your choice.** Numbers show what is used by default, like the Claude Code and Codex screens. Set **Percent Mode** to `left` to count down instead. The hover and dashboard always show both, for example `57% (43% left)`. Short formats mark each number with ↑ (used) or ↓ (left).
 - **Run-out forecast.** Nexus tracks your burn rate and tells you "At this pace it runs out in 2h 10m (3:40 PM)" or "lasts until the reset".
 - **24-hour history.** A small chart per quota shows how fast you used it.
 - **Smart alerts.** You get a notification at 20% and 5% left (you can change the levels), and another when a quota resets. When one Antigravity pool is low, it suggests a pool that still has room. Snooze alerts for an hour with one click.
@@ -85,6 +86,7 @@ Nexus detects the new account within one refresh.
 |---|---|---|
 | `quotaNexus.statusBar.show` | `true` | Show quota in the status bar |
 | `quotaNexus.statusBar.format` | `descriptive` | `descriptive`, `compact` or `minimal` labels |
+| `quotaNexus.display.percentMode` | `used` | Show percent `used` or percent `left` |
 | `quotaNexus.statusBar.showEmail` | `false` | Show the Antigravity account in the status bar |
 | `quotaNexus.privacy.maskEmails` | `true` | Mask emails |
 | `quotaNexus.refresh.activeInterval` | `60000` | Refresh interval in ms (30 s to 5 min) |

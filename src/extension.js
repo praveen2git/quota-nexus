@@ -11,7 +11,7 @@ const { CodexReader } = require('./codex');
 const { Accounts } = require('./accounts');
 const { evaluateAlerts } = require('./alerts');
 const { History } = require('./history');
-const { buildViewState, seriesId, claudeWindows, codexWindows, IDLE_MS } = require('./viewState');
+const { buildViewState, seriesId, claudeWindows, codexWindows, markActive, IDLE_MS } = require('./viewState');
 const { StatusBar } = require('./statusBar');
 const { DashboardProvider } = require('./webview');
 const { maskEmail, formatCountdown, formatAgo } = require('./util');
@@ -20,7 +20,11 @@ const ALERTS_KEY = 'nexus.alerts.v1';
 const SNOOZE_KEY = 'nexus.alertsSnooze';
 const SNOOZE_MS = 3600e3;
 const USAGE_MIN_GAP_MS = 5 * 60000;
-const WATCH_DEBOUNCE_MS = 1500;
+const WATCH_THROTTLE_MS = 1500;
+const FOCUS_REFRESH_MS = 60000;
+const AG_WATCH_MS = 5000;
+const AG_STATUS_MS = 30000;
+const TICK_MS = 60000;
 
 class Nexus {
     constructor(context) {
@@ -49,6 +53,14 @@ class Nexus {
         this.startTimer = null;
         this.renderTimer = null;
         this.watchers = [];
+        this.ctxSeen = {};
+        this.agChecked = false;
+        this.agStatusAt = 0;
+        this.tickTimer = null;
+    }
+
+    markActive(c) {
+        return markActive(this.ctxSeen, c, Date.now());
     }
 
     start() {
@@ -66,7 +78,7 @@ class Nexus {
                 else this.render();
             }),
             vscode.window.onDidChangeWindowState(s => {
-                if (s.focused && Date.now() - this.updatedAt > cfg.interval()) this.refresh();
+                if (s.focused && Date.now() - this.updatedAt > Math.min(cfg.interval(), FOCUS_REFRESH_MS)) this.refresh();
             }),
             cmd('quotaNexus.refresh', () =>
                 vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title: 'Quota Nexus: refreshing' }, () => this.refresh(true))),
@@ -83,7 +95,7 @@ class Nexus {
         this.watch();
         this.schedule();
         this.render();
-        this.startTimer = setTimeout(() => this.refresh(), 1000);
+        this.startTimer = setTimeout(() => this.refresh(), 50);
     }
 
     schedule() {
@@ -92,6 +104,11 @@ class Nexus {
             if (cfg.get('refresh.pauseWhenUnfocused', true) && !vscode.window.state.focused) return;
             this.refresh();
         }, cfg.interval());
+        // Redraw only (no I/O) so countdowns and "Updated" stay current between refreshes.
+        clearInterval(this.tickTimer);
+        this.tickTimer = setInterval(() => {
+            if (vscode.window.state.focused) this.render();
+        }, TICK_MS);
     }
 
     refresh(force) {
@@ -112,34 +129,41 @@ class Nexus {
         return cfg.get('contextWindow.showAntigravity', true) && cfg.get('contextWindow.display', 'auto') !== 'off';
     }
 
+    // Each source renders as soon as it lands, so fast local logs never wait for agy discovery.
     async doRefresh() {
         const started = Date.now();
         const ws = this.wsPaths();
+        const settle = (name, task, apply) => task
+            .then(apply, e => this.log.warn(`${name}: ${e && e.message}`))
+            .then(() => { this.updatedAt = Date.now(); this.render(); });
         const agyTask = (async () => {
             const s = await this.agy.getStatus();
             const ctx = s && this.wantAgContext() ? await this.agy.getContext(ws, s.modelLabels).catch(() => null) : null;
             return { s, ctx };
-        })();
-        const ccTask = cfg.get('claudeCode.enable', true) ? this.claude.read(ws) : Promise.resolve(null);
-        const cxTask = cfg.get('codex.enable', true) ? this.codexReader.read(ws) : Promise.resolve(null);
-        const [agy, cc, cx, usage] = await Promise.allSettled([agyTask, ccTask, cxTask, this.refreshUsage()]);
-        for (const [name, r] of [['Antigravity', agy], ['Claude Code logs', cc], ['Codex logs', cx], ['Claude Code limits', usage]]) {
-            if (r.status === 'rejected') this.log.warn(`${name}: ${r.reason && r.reason.message}`);
-        }
-
-        if (agy.status === 'fulfilled' && agy.value.s) {
-            this.onStatus(agy.value.s);
-            this.agContext = agy.value.ctx;
-        } else {
-            this.connected = false;
-            this.agContext = null;
-        }
-        if (cc.status === 'fulfilled') this.ccContext = cc.value;
-        if (cx.status === 'fulfilled') this.codexData = cx.value;
-        this.runToolAlerts();
-        this.updatedAt = Date.now();
-        this.lastRefreshMs = this.updatedAt - started;
-        this.render();
+        })().catch(e => {
+            this.log.warn(`Antigravity: ${e && e.message}`);
+            return { s: null, ctx: null };
+        });
+        await Promise.all([
+            settle('Antigravity', agyTask, ({ s, ctx }) => {
+                this.agChecked = true;
+                this.agStatusAt = Date.now();
+                if (s) {
+                    this.onStatus(s);
+                    this.agContext = ctx;
+                } else {
+                    this.connected = false;
+                    this.agContext = null;
+                }
+            }),
+            settle('Claude Code logs', cfg.get('claudeCode.enable', true) ? this.claude.read(ws) : Promise.resolve(null), v => { this.ccContext = v; }),
+            settle('Codex logs', cfg.get('codex.enable', true) ? this.codexReader.read(ws) : Promise.resolve(null), v => {
+                this.codexData = v;
+                this.runToolAlerts();
+            }),
+            settle('Claude Code limits', this.refreshUsage(), () => this.runToolAlerts())
+        ]);
+        this.lastRefreshMs = Date.now() - started;
     }
 
     async refreshUsage() {
@@ -254,18 +278,20 @@ class Nexus {
         const cxEnabled = cfg.get('codex.enable', true);
         const v = buildViewState({
             mask: cfg.get('privacy.maskEmails', true),
+            percentMode: cfg.get('display.percentMode', 'used'),
             connected: this.connected,
+            connecting: !this.agChecked,
             status: this.status,
             accounts: this.accounts.all(),
-            agContext: this.agContext,
+            agContext: this.markActive(this.agContext),
             claude: {
                 enabled: ccEnabled,
                 usageEnabled: ccEnabled && fetchUsage,
-                context: this.ccContext,
+                context: this.markActive(this.ccContext),
                 usage: this.ccUsage,
                 usageError: this.ccUsageError
             },
-            codex: { enabled: cxEnabled, data: this.codexData },
+            codex: { enabled: cxEnabled, data: this.codexData && { ...this.codexData, context: this.markActive(this.codexData.context) } },
             history: id => this.history.series(id),
             updatedAt: this.updatedAt
         });
@@ -382,9 +408,12 @@ class Nexus {
     }
 
     watch() {
-        const debounced = (fn) => {
+        // Throttle, not debounce: an active session writes nonstop, so a debounce never fired.
+        const throttled = (fn, ms = WATCH_THROTTLE_MS) => {
             let t = null;
-            return () => { clearTimeout(t); t = setTimeout(fn, WATCH_DEBOUNCE_MS); };
+            return () => {
+                if (!t) t = setTimeout(() => { t = null; fn(); }, ms);
+            };
         };
         const add = (dir, opts, filter, fn) => {
             try {
@@ -396,27 +425,30 @@ class Nexus {
                 this.log.info(`File watch unavailable for ${path.basename(dir)}; polling only`);
             }
         };
-        add(path.join(this.home, '.claude', 'projects'), { recursive: true }, n => n.endsWith('.jsonl'), debounced(async () => {
+        add(path.join(this.home, '.claude', 'projects'), { recursive: true }, n => n.endsWith('.jsonl'), throttled(async () => {
             if (!cfg.get('claudeCode.enable', true)) return;
             this.ccContext = await this.claude.read(this.wsPaths()).catch(() => this.ccContext);
             this.render();
         }));
-        add(path.join(this.home, '.codex', 'sessions'), { recursive: true }, n => n.endsWith('.jsonl'), debounced(async () => {
+        add(path.join(this.home, '.codex', 'sessions'), { recursive: true }, n => n.endsWith('.jsonl'), throttled(async () => {
             if (!cfg.get('codex.enable', true)) return;
             this.codexData = await this.codexReader.read(this.wsPaths()).catch(() => this.codexData);
             this.runToolAlerts();
             this.render();
         }));
-        add(path.join(this.home, '.gemini', 'antigravity', 'conversations'), {}, () => true, debounced(async () => {
-            if (!this.connected || !this.wantAgContext() || !this.status) return;
+        // Activity here means agy is up: find it if new, and keep its quota fresh while in use.
+        add(path.join(this.home, '.gemini', 'antigravity', 'conversations'), {}, n => !n.endsWith('-shm'), throttled(async () => {
+            if (!this.connected || Date.now() - this.agStatusAt > AG_STATUS_MS) return this.refresh();
+            if (!this.wantAgContext() || !this.status) return;
             this.agContext = await this.agy.getContext(this.wsPaths(), this.status.modelLabels).catch(() => this.agContext);
             this.render();
-        }));
+        }, AG_WATCH_MS));
     }
 
     dispose() {
         clearTimeout(this.startTimer);
         clearInterval(this.timer);
+        clearInterval(this.tickTimer);
         clearTimeout(this.renderTimer);
         this.history.save(true);
         for (const w of this.watchers) {
