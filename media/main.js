@@ -207,11 +207,22 @@
             spark(p.spark));
     }
 
+    function fillClass(w) {
+        if (w.left <= 10) return 'low';
+        if (w.left <= 30) return 'warn';
+        const n = (w.name || w.short || '').toLowerCase();
+        if (n.includes('gemini') || n.includes('gem')) return 'gemini';
+        if (n.includes('claude') || n.includes('cl/')) return 'claude';
+        if (n.includes('gpt')) return 'gpt';
+        return 'ok';
+    }
+
     function limitRow(w) {
         const m = mode();
-        const tip = `${w.name}: ${pctText(w)}${w.countdown ? ' · ' + resetsText(w) : ''}${w.forecast ? ' · ' + w.forecast : ''}`;
+        const rateNote = w.drainRate ? ` · ↓ ${w.drainRate}%/hr` : '';
+        const tip = `${w.name}: ${pctText(w)}${w.countdown ? ' · ' + resetsText(w) : ''}${rateNote}${w.forecast ? ' · ' + w.forecast : ''}`;
         const pct = Math.max(0, Math.min(100, Math.round(w[m])));
-        const cls = level(w.left);
+        const cls = fillClass(w);
 
         const fill = h('div', { class: `pill-fill ${cls}` });
         fill.style.width = `${pct}%`;
@@ -223,11 +234,12 @@
             track.append(needle);
         }
 
+        const resetText = w.estimated ? '~est' : (w.countdown || 'Ready');
         return h('div', { class: 'stream-row', title: tip },
-            h('span', { class: 'stream-label' }, w.name),
+            h('span', { class: 'stream-label' }, w.short || w.name),
             track,
-            h('span', { class: `stream-pct ${cls}` }, `${pct}%`),
-            h('span', { class: 'stream-reset' }, w.countdown || 'Ready'));
+            h('span', { class: `stream-pct ${level(w.left)}` }, `${pct}%`),
+            h('span', { class: 'stream-reset' }, resetText));
     }
 
     function fmtK(n) {
@@ -276,7 +288,7 @@
             const s = h('div', { class: `spectrum-seg bar-fill ${cls}` });
             s.style.width = `${pctUsed}%`;
             track.append(s);
-            legendDots.push(h('span', null, `${c.left} tokens left`));
+            legendDots.push(h('span', { class: 'muted' }, c.windowExact ? 'Session context' : 'Estimated context'));
         }
 
         const headRight = `${pctUsed}% used · ${fmtK(c.usedTokens)}${c.maxTokens ? ' / ' + fmtK(c.maxTokens) : ''}`;
@@ -332,9 +344,14 @@
         return h('section', { class: 'card active' },
             cardHeader('active', h('span', null, h('span', { class: 'dot on' }), a.display),
                 [badge(a.label, 'label'), badge('Active', 'on'), badge(a.planName, 'plan')]),
-            h('div', { class: 'summary' }, a.pools.map(p => h('span', null, `${p.short} ${pctText(p)}`))),
+            !open ? h('div', { class: 'summary' }, a.pools.map(p => h('span', null, `${p.short} ${pctText(p)}`))) : null,
             open ? h('div', { class: 'details' },
-                a.pools.length ? h('div', { class: 'dials-grid' }, a.pools.map(dialGauge)) : h('div', { class: 'muted' }, 'No quota data reported.'),
+                a.pools.length ? [
+                    h('div', { class: 'stream-head' },
+                        h('span', null, 'Pool'),
+                        h('span', null, 'Used / Pace / Reset')),
+                    ...a.pools.map(limitRow)
+                ] : h('div', { class: 'muted' }, 'No quota data reported.'),
                 urgent ? h('div', { class: 'row-note' }, urgent.forecast) : null,
                 modelsText ? h('div', { class: 'models-summary', title: modelsText }, modelsText) : null,
                 s.agContext ? contextSpectrum(s.agContext) : null,
@@ -347,7 +364,7 @@
         if (context) sum.push(h('span', null, `ctx ${Math.round(ctxPct(context)[mode()])}% ${mode()}`));
         return h('section', { class: 'card' },
             cardHeader(id, h('span', null, h('span', { class: `dot ${dotCls}` }), title), badges),
-            h('div', { class: 'summary' }, sum),
+            !open ? h('div', { class: 'summary' }, sum) : null,
             open ? h('div', { class: 'details' },
                 wins.length ? [
                     h('div', { class: 'stream-head' },
@@ -367,10 +384,15 @@
         const canDown = typeof idx === 'number' && typeof total === 'number' && idx < total - 1;
         return h('section', { class: 'card' },
             cardHeader(id, h('span', null, h('span', { class: 'dot' }), a.display), [rank, badge(a.label, 'label'), badge(a.planName, 'plan')]),
-            h('div', { class: 'summary' },
-                a.pools.length ? a.pools.map(p => h('span', null, `${p.short} ${pctText(p)}`)) : h('span', { class: 'muted' }, 'No snapshot yet')),
+            !open ? h('div', { class: 'summary' },
+                a.pools.length ? a.pools.map(p => h('span', null, `${p.short} ${pctText(p)}`)) : h('span', { class: 'muted' }, 'No snapshot yet')) : null,
             open ? h('div', { class: 'details' },
-                a.pools.length ? h('div', { class: 'dials-grid' }, a.pools.map(dialGauge)) : null,
+                a.pools.length ? [
+                    h('div', { class: 'stream-head' },
+                        h('span', null, 'Pool'),
+                        h('span', null, 'Used / Pace / Reset')),
+                    ...a.pools.map(limitRow)
+                ] : null,
                 h('div', { class: 'muted small' }, a.snapshotAgo ? `Last seen ${a.snapshotAgo}. Values update when this account is active.` : 'Sign in once to capture a snapshot.'),
                 h('div', { class: 'actions' },
                     h('button', { class: 'btn primary', 'data-action': 'switch', 'data-email': a.email }, 'Switch to this account'),
