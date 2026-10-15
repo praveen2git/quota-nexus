@@ -73,6 +73,10 @@
         return h('span', { class: 'row-pct' }, pctText(x), h('span', { class: 'muted' }, ` (${x[o]}% ${o})`));
     }
 
+    function resetPassedText() {
+        return `Reset time has passed - likely back to ${mode() === 'used' ? '0% used' : '100% left'}`;
+    }
+
     function ctxPct(c) {
         const used = Math.round(c.pct);
         return { used, left: 100 - used };
@@ -84,8 +88,8 @@
 
     function poolRow(p, withModels) {
         let reset;
-        if (p.estimated) reset = 'Reset time has passed - likely full';
-        else if (p.pct >= 100) reset = 'Full';
+        if (p.estimated) reset = resetPassedText();
+        else if (p.pct >= 100) reset = 'Nothing used yet';
         else if (p.countdown) reset = `Resets in ${p.countdown} (${p.wall})`;
         return h('div', { class: 'row' },
             h('div', { class: 'row-head' },
@@ -99,8 +103,8 @@
 
     function limitRow(w) {
         let reset = '';
-        if (w.estimated) reset = 'Reset time has passed - likely full';
-        else if (w.left >= 100) reset = 'Full';
+        if (w.estimated) reset = resetPassedText();
+        else if (w.left >= 100) reset = 'Nothing used yet';
         else if (w.countdown) reset = `Resets in ${w.countdown} (${w.wall})`;
         return h('div', { class: 'row' },
             h('div', { class: 'row-head' },

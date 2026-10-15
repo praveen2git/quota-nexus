@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.6] - 2026-10-15
+
+### Fixed
+- Clearer wording in `used` mode. A quota with nothing used says "Nothing used yet" instead of "Full", which read like "used up". A passed reset time says "likely back to 0% used" (or "100% left" in `left` mode). The hover's Resets column says "not used".
+
+### Changed
+- New README screenshots of the dashboard and the settings panel.
+
 ## [1.2.5] - 2026-10-14
 
 ### Added

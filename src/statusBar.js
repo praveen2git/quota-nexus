@@ -25,7 +25,7 @@ function tooltip() {
 }
 
 function resetText(w, full) {
-    if (full) return 'full';
+    if (full) return 'not used';
     if (w.estimated) return 'likely reset';
     return w.countdown ? `${w.countdown} (${w.wall})` : '';
 }

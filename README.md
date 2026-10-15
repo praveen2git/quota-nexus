@@ -19,7 +19,11 @@ See how much AI quota you have left, when it resets and when you will run out, f
 
 **Dashboard**
 
-![Quota Nexus dashboard with the Antigravity account, its pools and models, and the Claude Code card](images/dashboard.png)
+![Quota Nexus dashboard with Antigravity pools and models, Claude Code limits with charts, and an idle Codex card](images/dashboard.png)
+
+**Settings in the dashboard:** click the gear for every switch, grouped by tool.
+
+![Dashboard settings panel grouped into General, Status Bar, Alerts, Antigravity, Claude Code and Codex](images/settings.png)
 
 ## Install
 
