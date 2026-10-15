@@ -51,26 +51,41 @@ const OPT = { show: true, showEmail: false, thresholds: [20, 5], showClaudeUsage
 test('left mode shows percent LEFT for every tool', () => {
     const { bar, items } = loadStatusBar();
     bar.update(view(false, 'left'), { ...OPT, format: 'descriptive' });
-    assert.strictEqual(items[0].text, '$(dashboard) Antigravity: Gemini 100% · Claude / GPT-OSS 22% left | Claude Code: 70% · wk 50% left | Codex: ~100% left');
+    assert.strictEqual(items[0].text, '$(dashboard) Antigravity: Gemini 100% · Claude 22% left | Claude Code: 70% · wk 50% left | Codex: ~100% left');
     assert.match(items[0].tooltip.value, /\| Window \| \| Left \| Resets \|/);
     assert.match(items[0].tooltip.value, /\| 70% \(30% used\) \|/);
     assert.match(items[0].tooltip.value, /\| 22% \(78% used\) \|/);
     assert.match(items[0].tooltip.value, /Percentages show what is left \(↓\)/);
     assert.match(items[0].tooltip.value, /\[Show used instead\]\(command:quotaNexus\.togglePercentMode\)/);
     bar.update(view(false, 'left'), { ...OPT, format: 'compact' });
-    assert.strictEqual(items[0].text, '$(dashboard) AG: Gem 100%↓ · Cl/GPT 22%↓ | CC: 70%↓ · wk 50%↓ | CX: ~100%↓');
+    assert.strictEqual(items[0].text, '$(dashboard) AG: Gemini 100%↓ · Claude 22%↓ | CC: 70%↓ · wk 50%↓ | CX: ~100%↓');
 });
 
 test('used is the default and flips every number, column and arrow', () => {
     const { bar, items } = loadStatusBar();
     bar.update(view(false), { ...OPT, format: 'descriptive' });
-    assert.strictEqual(items[0].text, '$(dashboard) Antigravity: Gemini 0% · Claude / GPT-OSS 78% used | Claude Code: 30% · wk 50% used | Codex: ~0% used');
-    assert.match(items[0].tooltip.value, /\| Pool \| \| Used \| Resets \|/);
+    assert.strictEqual(items[0].text, '$(dashboard) Antigravity: Gemini 0% · Claude 78% used | Claude Code: 30% · wk 50% used | Codex: ~0% used');
+    assert.match(items[0].tooltip.value, /\| Model \| \| Used \| Resets \|/);
     assert.match(items[0].tooltip.value, /\| 30% \(70% left\) \|/);
     assert.match(items[0].tooltip.value, /\[Show left instead\]/);
     bar.update(view(false, 'used'), { ...OPT, format: 'minimal' });
-    assert.strictEqual(items[0].text, '$(dashboard) Gem 0%↑ | Cl/GPT 78%↑ | CC 30%↑ · wk 50%↑ | CX ~0%↑');
+    assert.strictEqual(items[0].text, '$(dashboard) Gemini 0%↑ | Claude 78%↑ | CC 30%↑ · wk 50%↑ | CX ~0%↑');
     assert.strictEqual(items[0].backgroundColor, undefined, 'colour still follows what is left');
+});
+
+test('Antigravity 5-hour / weekly limits: tightest per group in the bar, every window in the hover', () => {
+    const { bar, items } = loadStatusBar();
+    const v = view(false, 'used');
+    v.active.limits = [
+        { short: 'Gemini', windows: [win('5-hour', 14), win('Weekly', 3)] },
+        { short: 'Claude', windows: [win('5-hour', 7), win('Weekly', 82)] }
+    ];
+    bar.update(v, { ...OPT, format: 'compact' });
+    assert.match(items[0].text, /AG: Gemini 14%↑ · Claude 82%↑ \|/);
+    const md = items[0].tooltip.value;
+    assert.match(md, /\| Model \| Window \| \| Used \| Resets \|/);
+    assert.match(md, /\| \*\*Claude\*\* \| 5\\?-hour \| .* \| 7% \(93% left\) \|/);
+    assert.match(md, /\|  \| Weekly \| .* \| 82% \(18% left\) \|/);
 });
 
 test('context window follows percent mode too', () => {
@@ -100,7 +115,7 @@ test('tools with data come first, missing ones are notes at the bottom', () => {
 test('idle Codex stays off the status bar and the context item', () => {
     const { bar, items } = loadStatusBar();
     bar.update(view(true, 'left'), { ...OPT, format: 'minimal' });
-    assert.strictEqual(items[0].text, '$(dashboard) Gem 100%↓ | Cl/GPT 22%↓ | CC 70%↓ · wk 50%↓');
+    assert.strictEqual(items[0].text, '$(dashboard) Gemini 100%↓ | Claude 22%↓ | CC 70%↓ · wk 50%↓');
     assert.match(items[0].tooltip.value, /Codex not used for 37d/);
     assert.strictEqual(items[1].visible, false, 'no Codex context item when idle');
 });
@@ -134,7 +149,7 @@ test('Antigravity can be hidden from the status bar or turned off', () => {
     const { bar, items } = loadStatusBar();
     bar.update(view(false), { ...OPT, format: 'minimal', showAgUsage: false });
     assert.strictEqual(items[0].text, '$(dashboard) CC 30%↑ · wk 50%↑ | CX ~0%↑');
-    assert.match(items[0].tooltip.value, /### Antigravity quota/, 'still in the hover');
+    assert.match(items[0].tooltip.value, /### Antigravity\n/, 'still in the hover');
     bar.update({ ...view(false), active: null, antigravityEnabled: false }, { ...OPT, format: 'minimal' });
     assert.doesNotMatch(items[0].tooltip.value, /Antigravity/, 'turned off: no "not detected" note');
 });

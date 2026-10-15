@@ -1,7 +1,8 @@
 'use strict';
 
-const { formatCountdown, formatWallClock, formatAgo, maskEmail } = require('./util');
+const { formatCountdown, formatWallClock, formatAgo, maskEmail, friendlyGroup } = require('./util');
 const { forecast, sparkline } = require('./history');
+const { limitsMatch } = require('./parse');
 
 const IDLE_MS = 7 * 24 * 3600e3;
 
@@ -66,6 +67,7 @@ function usedView(w, now, mayBeStale, points) {
     if (w.name.includes('5-hour') || w.name.includes('5h')) dur = 5 * 3600e3;
     else if (w.name.includes('Weekly') || w.name.includes('wk') || w.name.includes('7-day')) dur = 7 * 24 * 3600e3;
     else if (w.name.includes('Daily') || w.name.includes('24h') || w.name.includes('1-day')) dur = 24 * 3600e3;
+    else if (/^\d+-(hour|day)$/.test(w.name)) dur = parseInt(w.name, 10) * (w.name.endsWith('day') ? 24 : 1) * 3600e3;
     if (dur && !isNaN(resetMs) && resetMs > now) {
         const rem = resetMs - now;
         if (rem <= dur) pacePct = Math.round(Math.max(0, Math.min(100, (1 - rem / dur) * 100)));
@@ -84,6 +86,20 @@ function usedView(w, now, mayBeStale, points) {
         spark: points ? sparkline(points, now) : null,
         forecast: points ? forecastText(points, 100 - pct, w.resetsAt, now) : ''
     };
+}
+
+// Antigravity 5-hour / weekly buckets per model group, shown like Claude's windows.
+function limitGroupsView(groups, now, fromSnapshot) {
+    if (!Array.isArray(groups)) return [];
+    return groups.map(g => ({
+        id: g.id,
+        name: g.name,
+        short: friendlyGroup(g.name),
+        windows: g.windows.map(w => ({
+            ...usedView({ id: w.id, name: w.name, pct: 100 - w.remainingPct, resetsAt: w.resetTime }, now, fromSnapshot, null),
+            group: g.name
+        }))
+    }));
 }
 
 function claudeWindows(usage) {
@@ -148,6 +164,7 @@ function buildViewState(input) {
         label: activeAcc.label || '',
         planName: s.planName,
         pools: s.pools.map(p => poolView(p, now, false, hist(seriesId.ag(s.email, p.id)))),
+        limits: limitGroupsView(s.limits, now, false),
         credits: s.credits || {}
     } : null;
 
@@ -162,7 +179,9 @@ function buildViewState(input) {
             order: idx + 1,
             lastActiveAgo: formatAgo(a.lastActive, now),
             snapshotAgo: a.snapshot ? formatAgo(a.snapshot.capturedAt, now) : '',
-            pools: a.snapshot ? a.snapshot.pools.map(p => poolView(p, now, true, null)) : []
+            pools: a.snapshot ? a.snapshot.pools.map(p => poolView(p, now, true, null)) : [],
+            // Older builds could save another account's limits; drop ones that disagree with the pools.
+            limits: a.snapshot && limitsMatch(a.snapshot.pools, a.snapshot.limits) ? limitGroupsView(a.snapshot.limits, now, true) : []
         }));
 
     const suggestion = findBetterAccount(active, others);

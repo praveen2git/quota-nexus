@@ -40,6 +40,9 @@ test('windowName labels Codex windows by length', () => {
     assert.strictEqual(windowName(10080), 'Weekly');
     assert.strictEqual(windowName(43200), '30-day');
     assert.strictEqual(windowName(0), 'Limit');
+    assert.strictEqual(windowName(299), '5-hour');
+    assert.strictEqual(windowName(10079), 'Weekly');
+    assert.strictEqual(windowName(45), '45-min');
 });
 
 test('parseCodexLines reads newest usage, limits and model', () => {

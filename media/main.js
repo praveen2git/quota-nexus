@@ -5,15 +5,21 @@
     const root = document.getElementById('root');
     const saved = vscode.getState() || {};
     const expanded = new Set(saved.expanded || ['active', 'claude', 'codex']);
-    const SVG_NS = 'http://www.w3.org/2000/svg';
     let state = null;
     let settingsOpen = !!saved.settingsOpen;
     // While settings are open, skip redraws that change nothing there, so an open dropdown stays open.
     let shownSig = '';
 
-    // Constant SVG markup only; user data always goes through textContent.
+    // Constant SVG markup only (codicon-style, 16px); user data always goes through textContent.
+    const svg = d => `<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="${d}"/></svg>`;
     const ICON = {
-        chevron: '<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/></svg>'
+        chevron: svg('M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'),
+        up: svg('M8 3.3l4.85 4.85-.7.7L8.5 5.2V13h-1V5.2L3.85 8.85l-.7-.7L8 3.3z'),
+        down: svg('M8 12.7L3.15 7.85l.7-.7 3.65 3.65V3h1v7.8l3.65-3.65.7.7L8 12.7z'),
+        tag: svg('M2 2h5.6L14 8.4 8.4 14 2 7.6V2zm1 1v4.2l5.4 5.4 4.2-4.2L7.2 3H3zm2 1.25a.75.75 0 1 1 0 1.5.75.75 0 0 1 0-1.5z'),
+        trash: svg('M6 1.5h4v1h3.5v1h-1v10a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-10h-1v-1H6v-1zm-1.5 2v10h7v-10h-7zm2 2h1v6h-1v-6zm2 0h1v6h-1v-6z'),
+        plus: svg('M7.5 2h1v5.5H14v1H8.5V14h-1V8.5H2v-1h5.5V2z'),
+        warn: svg('M8 1.5l7 12.5H1L8 1.5zm0 2.05L2.7 13h10.6L8 3.55zM7.5 6h1v4h-1V6zm0 5h1v1h-1v-1z')
     };
 
     function h(tag, attrs, ...kids) {
@@ -24,382 +30,234 @@
             else if (k === 'html') el.innerHTML = String(v);
             else el.setAttribute(k, v === true ? '' : String(v));
         }
-        for (const c of kids.flat()) {
+        for (const c of kids.flat(Infinity)) {
             if (c === null || c === undefined || c === false || c === '') continue;
             el.append(c instanceof Node ? c : document.createTextNode(String(c)));
         }
         return el;
     }
 
+    function icon(name) {
+        return h('span', { class: 'ico', html: ICON[name] });
+    }
+
     function level(pctLeft) {
         return pctLeft <= 10 ? 'low' : pctLeft <= 30 ? 'warn' : 'ok';
-    }
-
-    function bar(pct, cls) {
-        const fill = h('div', { class: `bar-fill ${cls}` });
-        fill.style.width = `${Math.max(0, Math.min(100, pct))}%`;
-        return h('div', { class: 'bar', role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuenow': Math.round(pct) }, fill);
-    }
-
-    // points: [[x 0..100, y 0..100]], y = 100 - left (SVG top = full); flipped in used mode.
-    function spark(points) {
-        if (!points || points.length < 2) return null;
-        if (mode() === 'used') points = points.map(([x, y]) => [x, 100 - y]);
-        const svg = document.createElementNS(SVG_NS, 'svg');
-        svg.setAttribute('viewBox', '0 0 100 100');
-        svg.setAttribute('preserveAspectRatio', 'none');
-        svg.setAttribute('class', 'spark');
-        svg.setAttribute('role', 'img');
-        svg.setAttribute('aria-label', 'Last 24 hours');
-        const line = document.createElementNS(SVG_NS, 'polyline');
-        line.setAttribute('points', points.map(([x, y]) => `${Number(x)},${Number(y)}`).join(' '));
-        line.setAttribute('vector-effect', 'non-scaling-stroke');
-        svg.append(line);
-        return h('div', { class: 'spark-wrap', title: 'Last 24 hours' }, svg);
     }
 
     function mode() {
         return state && state.percentMode === 'left' ? 'left' : 'used';
     }
 
-    // x carries both left and used; show the chosen one first.
     function pctText(x) {
         const m = mode();
         return `${x.estimated ? '~' : ''}${x[m]}% ${m}`;
-    }
-
-    function pctHead(x) {
-        const o = mode() === 'used' ? 'left' : 'used';
-        return h('span', { class: 'row-pct' }, pctText(x), h('span', { class: 'muted' }, ` (${x[o]}% ${o})`));
     }
 
     function resetsText(x) {
         return x.countdown === 'now' ? `Resets now (${x.wall})` : `Resets in ${x.countdown} (${x.wall})`;
     }
 
-    function resetPassedText() {
-        return `Reset time has passed - likely back to ${mode() === 'used' ? '0% used' : '100% left'}`;
+    function fmtK(n) {
+        if (!n || n <= 0) return '0';
+        if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+        if (n >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, '') + 'K';
+        return String(n);
     }
 
-    function ctxPct(c) {
-        const used = Math.round(c.pct);
-        return { used, left: 100 - used };
+    // "Claude and GPT models" -> "Claude", "Gemini Models" -> "Gemini"; GPT only names a group without Claude.
+    function groupShort(name) {
+        const n = String(name || '').toLowerCase();
+        const parts = [['gemini', 'Gemini'], ['claude', 'Claude']].filter(([k]) => n.includes(k)).map(([, v]) => v);
+        if (!parts.length && n.includes('gpt')) parts.push('GPT');
+        return parts.length ? parts.join(' / ') : String(name || '').split(/\s+/)[0];
     }
 
-    function notes(...lines) {
-        return lines.filter(Boolean).map(t => h('div', { class: 'row-note' }, t));
-    }
-
-    function createGrad(id, c1, c2) {
-        const grad = document.createElementNS(SVG_NS, 'linearGradient');
-        grad.setAttribute('id', id);
-        grad.setAttribute('x1', '0%');
-        grad.setAttribute('y1', '0%');
-        grad.setAttribute('x2', '100%');
-        grad.setAttribute('y2', '100%');
-        const s1 = document.createElementNS(SVG_NS, 'stop');
-        s1.setAttribute('offset', '0%');
-        s1.setAttribute('stop-color', c1);
-        const s2 = document.createElementNS(SVG_NS, 'stop');
-        s2.setAttribute('offset', '100%');
-        s2.setAttribute('stop-color', c2);
-        grad.append(s1, s2);
-        return grad;
-    }
-
-    function svgDefs() {
-        const svg = document.createElementNS(SVG_NS, 'svg');
-        svg.setAttribute('class', 'svg-defs');
-        svg.setAttribute('aria-hidden', 'true');
-        const defs = document.createElementNS(SVG_NS, 'defs');
-        defs.append(
-            createGrad('g-gemini', '#06b6d4', '#8b5cf6'),
-            createGrad('g-claude', '#f97316', '#f43f5e'),
-            createGrad('g-gpt', '#10b981', '#06b6d4'),
-            createGrad('g-cx', '#3b82f6', '#6366f1'),
-            createGrad('g-ok', '#10b981', '#22c55e'),
-            createGrad('g-warn', '#f59e0b', '#ea580c'),
-            createGrad('g-low', '#f43f5e', '#e11d48')
-        );
-        svg.append(defs);
-        return svg;
-    }
-
-    function dialStroke(p) {
-        if (p.left <= 10) return 'url(#g-low)';
-        if (p.left <= 30) return 'url(#g-warn)';
-        const n = (p.name || p.short || '').toLowerCase();
-        if (n.includes('gemini')) return 'url(#g-gemini)';
-        if (n.includes('claude')) return 'url(#g-claude)';
-        if (n.includes('gpt')) return 'url(#g-gpt)';
-        return 'url(#g-ok)';
-    }
-
-    function dialGauge(p) {
-        const m = mode();
-        const pct = Math.max(0, Math.min(100, Math.round(p[m])));
-        const fillLen = ((pct / 100) * 122.9).toFixed(1);
-        const tip = `${p.name}: ${pctText(p)}${p.countdown ? ' · ' + resetsText(p) : ''}${p.forecast ? ' · ' + p.forecast : ''}${p.models && p.models.length ? ' · Models: ' + p.models.join(', ') : ''}`;
-
-        const svg = document.createElementNS(SVG_NS, 'svg');
-        svg.setAttribute('viewBox', '0 0 84 80');
-        svg.setAttribute('class', 'dial-svg');
-
-        const track = document.createElementNS(SVG_NS, 'circle');
-        track.setAttribute('cx', '42');
-        track.setAttribute('cy', '40');
-        track.setAttribute('r', '32');
-        track.setAttribute('class', 'dial-track');
-        track.setAttribute('stroke-dasharray', '122.9 201.1');
-        track.setAttribute('transform', 'rotate(160 42 40)');
-
-        const fill = document.createElementNS(SVG_NS, 'circle');
-        fill.setAttribute('cx', '42');
-        fill.setAttribute('cy', '40');
-        fill.setAttribute('r', '32');
-        fill.setAttribute('class', 'dial-fill');
-        fill.setAttribute('stroke', dialStroke(p));
-        fill.setAttribute('stroke-dasharray', `${fillLen} 201.1`);
-        fill.setAttribute('transform', 'rotate(160 42 40)');
-
-        const textVal = document.createElementNS(SVG_NS, 'text');
-        textVal.setAttribute('x', '42');
-        textVal.setAttribute('y', '38');
-        textVal.setAttribute('text-anchor', 'middle');
-        textVal.setAttribute('class', 'dial-val');
-        textVal.textContent = `${pct}%`;
-
-        const textMode = document.createElementNS(SVG_NS, 'text');
-        textMode.setAttribute('x', '42');
-        textMode.setAttribute('y', '49');
-        textMode.setAttribute('text-anchor', 'middle');
-        textMode.setAttribute('class', 'dial-mode');
-        textMode.textContent = m;
-
-        svg.append(track, fill, textVal, textMode);
-
-        const subText = p.estimated ? '~est' : (p.countdown || 'Ready');
-        const pillCls = level(p.left);
-        let pillText = pillCls === 'low' ? 'Low' : pillCls === 'warn' ? 'Tight' : 'Safe';
-        if (p.drainRate) {
-            pillText = `↓ ${p.drainRate}%/h`;
+    function meter(pct, lv, pace, label) {
+        const fill = h('div', { class: `meter-fill ${lv}` });
+        fill.style.width = `${pct}%`;
+        const track = h('div', { class: 'meter', role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuenow': pct, 'aria-label': label }, fill);
+        if (typeof pace === 'number' && pace >= 0 && pace <= 100) {
+            const tick = h('div', { class: 'meter-pace' });
+            tick.style.left = `${Math.min(99, Math.max(1, pace))}%`;
+            track.append(tick);
         }
-
-        return h('div', { class: 'dial-cell', title: tip },
-            svg,
-            h('div', { class: 'dial-name', title: p.name }, p.short || p.name),
-            h('div', { class: 'dial-sub' }, subText),
-            h('span', { class: `pill-tag ${pillCls}` }, pillText));
+        return track;
     }
 
-    function poolRow(p, withModels) {
-        let reset;
-        if (p.estimated) reset = resetPassedText();
-        else if (p.pct >= 100) reset = 'Nothing used yet';
-        else if (p.countdown) reset = resetsText(p);
-        return h('div', { class: 'row' },
-            h('div', { class: 'row-head' },
-                h('span', { class: 'row-name' }, p.name),
-                pctHead(p)),
-            bar(p[mode()], level(p.left)),
-            notes(reset, p.forecast),
-            withModels && p.models && p.models.length ? h('div', { class: 'row-note models' }, `Models: ${p.models.join(', ')}`) : null,
-            spark(p.spark));
+    // Collapsed view: equal-width cells (name, value, thin bar) so every card reads the same way.
+    function miniGrid(items, cols) {
+        const m = mode();
+        const grid = h('div', { class: 'mini-grid' }, items.map(([label, x, unit], i) => {
+            const u = unit || m;
+            const pct = Math.max(0, Math.min(100, Math.round(x[u])));
+            const lv = level(x.left);
+            return h('div', { class: `mini${i === items.length - 1 && i % cols === 0 ? ' full' : ''}`, title: `${label}: ${x.estimated ? '~' : ''}${pct}% ${u}` },
+                h('div', { class: 'mini-top' },
+                    h('span', { class: 'mini-k' }, label),
+                    h('span', { class: `mini-v ${lv}` }, `${x.estimated ? '~' : ''}${pct}%`, h('span', { class: 'mini-u' }, ` ${u}`))),
+                meter(pct, lv, null, `${label} ${pct}% ${u}`));
+        }));
+        grid.style.gridTemplateColumns = `repeat(${Math.max(1, cols)}, minmax(0, 1fr))`;
+        return grid;
     }
 
-    function fillClass(w) {
-        if (w.left <= 10) return 'low';
-        if (w.left <= 30) return 'warn';
-        const n = (w.name || w.short || '').toLowerCase();
-        if (n.includes('gemini') || n.includes('gem')) return 'gemini';
-        if (n.includes('claude') || n.includes('cl/')) return 'claude';
-        if (n.includes('gpt')) return 'gpt';
-        return 'ok';
+    function agSummary(a) {
+        if (a.limits && a.limits.length) {
+            const cols = Math.max(...a.limits.map(g => g.windows.length));
+            return miniGrid(a.limits.flatMap(g => g.windows.map(w => [`${groupShort(g.name)} ${w.name}`, w])), cols);
+        }
+        return miniGrid(a.pools.map(p => [groupShort(p.name), p]), Math.min(2, a.pools.length));
     }
 
     function limitRow(w) {
         const m = mode();
-        const rateNote = w.drainRate ? ` · ↓ ${w.drainRate}%/hr` : '';
-        const tip = `${w.name}: ${pctText(w)}${w.countdown ? ' · ' + resetsText(w) : ''}${rateNote}${w.forecast ? ' · ' + w.forecast : ''}`;
         const pct = Math.max(0, Math.min(100, Math.round(w[m])));
-        const cls = fillClass(w);
+        const lv = level(w.left);
+        // Pace tick follows the bar: time gone in "used" mode, time left in "left" mode.
+        const pace = typeof w.pacePct === 'number' ? (m === 'left' ? 100 - w.pacePct : w.pacePct) : null;
+        const paceNote = pace === null ? '' : ` · Tick: ${pace}% of the window ${m === 'left' ? 'left' : 'gone'}`;
+        const rate = w.drainRate ? ` · ↓ ${w.drainRate}%/hr` : '';
+        const tip = `${w.group ? w.group + ' · ' : ''}${w.name}: ${pctText(w)}${w.countdown ? ' · ' + resetsText(w) : ''}${paceNote}${rate}${w.forecast ? ' · ' + w.forecast : ''}`;
+        const reset = w.estimated ? 'Reset due' : (w.countdown || '-');
+        return h('div', { class: 'lim', title: tip },
+            h('span', { class: 'lim-name' }, w.short ? groupShort(w.name) : w.name),
+            meter(pct, lv, pace, `${w.name} ${pct}% ${m}`),
+            h('span', { class: `lim-pct ${lv}` }, lv === 'low' ? icon('warn') : null, `${pct}%`),
+            h('span', { class: 'lim-reset' }, reset));
+    }
 
-        const fill = h('div', { class: `pill-fill ${cls}` });
-        fill.style.width = `${pct}%`;
+    function groupHead(label, withLegend) {
+        return h('div', { class: 'grp-head' },
+            h('span', { class: 'grp-name' }, label),
+            withLegend ? h('span', { class: 'grp-legend' }, `${mode() === 'left' ? 'Left' : 'Used'} · Resets in`) : null);
+    }
 
-        const track = h('div', { class: 'pill-track', role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuenow': pct }, fill);
-        if (w.pacePct !== null && w.pacePct >= 0 && w.pacePct <= 100) {
-            const needle = h('div', { class: 'pill-needle', title: `Pace marker: elapsed window time (${w.pacePct}%)` });
-            needle.style.left = `${Math.min(98, Math.max(2, w.pacePct))}%`;
-            track.append(needle);
+    // 5-hour / weekly rows per model group when agy reports them, else one row per pool.
+    function antigravityLimits(a) {
+        if (a.limits && a.limits.length) {
+            return a.limits.map((g, i) => h('div', { class: 'grp' }, groupHead(g.name, i === 0), g.windows.map(limitRow)));
         }
-
-        const resetText = w.estimated ? '~est' : (w.countdown || 'Ready');
-        return h('div', { class: 'stream-row', title: tip },
-            h('span', { class: 'stream-label' }, w.short || w.name),
-            track,
-            h('span', { class: `stream-pct ${level(w.left)}` }, `${pct}%`),
-            h('span', { class: 'stream-reset' }, resetText));
+        return a.pools.length ? h('div', { class: 'grp' }, groupHead('Quota pools', true), a.pools.map(limitRow)) : null;
     }
 
-    function fmtK(n) {
-        if (!n || n <= 0) return '0';
-        if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
-        if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k';
-        return String(n);
-    }
-
-    function contextSpectrum(c) {
-        const cls = c.pct >= 95 ? 'low' : c.pct >= 80 ? 'warn' : 'ok';
-        const tip = c.pct >= 80 ? (c.source === 'codex' ? 'Nearly full: start a new session or /compact.' : 'Nearly full: /compact to keep going, /clear for a new task.') : '';
+    // Tool cards already name the model in their header, so they pass showModel = false.
+    function context(c, showModel) {
         const pctUsed = Math.min(100, Math.max(0, Math.round(c.pct)));
-
-        const track = h('div', { class: 'spectrum-track', role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuenow': pctUsed });
-        const hasGranular = c.maxTokens && (c.inputTokens || c.outputTokens || c.cacheReadTokens || c.thinkingTokens);
-
-        const legendDots = [];
-        if (hasGranular) {
-            const max = c.maxTokens;
-            if (c.inputTokens) {
-                const s = h('div', { class: 'spectrum-seg seg-in', title: `Input: ${fmtK(c.inputTokens)}` });
-                s.style.width = `${((c.inputTokens / max) * 100).toFixed(2)}%`;
-                track.append(s);
-                legendDots.push(h('span', { class: 'legend-item' }, h('span', { class: 'leg-dot in' }), `In ${fmtK(c.inputTokens)}`));
-            }
-            if (c.cacheReadTokens) {
-                const s = h('div', { class: 'spectrum-seg seg-cache', title: `Cache: ${fmtK(c.cacheReadTokens)}` });
-                s.style.width = `${((c.cacheReadTokens / max) * 100).toFixed(2)}%`;
-                track.append(s);
-                legendDots.push(h('span', { class: 'legend-item' }, h('span', { class: 'leg-dot cache' }), `Cache ${fmtK(c.cacheReadTokens)}`));
-            }
-            if (c.thinkingTokens) {
-                const s = h('div', { class: 'spectrum-seg seg-think', title: `Thinking: ${fmtK(c.thinkingTokens)}` });
-                s.style.width = `${((c.thinkingTokens / max) * 100).toFixed(2)}%`;
-                track.append(s);
-                legendDots.push(h('span', { class: 'legend-item' }, h('span', { class: 'leg-dot think' }), `Think ${fmtK(c.thinkingTokens)}`));
-            }
-            if (c.outputTokens) {
-                const s = h('div', { class: 'spectrum-seg seg-out', title: `Output: ${fmtK(c.outputTokens)}` });
-                s.style.width = `${((c.outputTokens / max) * 100).toFixed(2)}%`;
-                track.append(s);
-                legendDots.push(h('span', { class: 'legend-item' }, h('span', { class: 'leg-dot out' }), `Out ${fmtK(c.outputTokens)}`));
-            }
-        } else {
-            const s = h('div', { class: `spectrum-seg bar-fill ${cls}` });
-            s.style.width = `${pctUsed}%`;
-            track.append(s);
-            legendDots.push(h('span', { class: 'muted' }, c.windowExact ? 'Session context' : 'Estimated context'));
-        }
-
-        const headRight = `${pctUsed}% used · ${fmtK(c.usedTokens)}${c.maxTokens ? ' / ' + fmtK(c.maxTokens) : ''}`;
-        return h('div', { class: 'context-box', title: tip || undefined },
-            h('div', { class: 'context-head' },
-                h('span', { class: 'row-name' }, `Context · ${c.model}`),
-                h('span', { class: 'muted' }, headRight)),
-            track,
-            h('div', { class: 'token-legend' },
-                h('div', { class: 'legend-items' }, legendDots),
-                c.pct >= 80 ? h('span', { class: 'compact-btn', title: tip }, '/compact recommended') : h('span', { class: 'muted' }, `${c.left} left`)));
+        const lv = c.pct >= 95 ? 'low' : c.pct >= 80 ? 'warn' : 'ok';
+        const full = c.pct >= 80;
+        const max = c.windowTokens || 0;
+        const left = max ? fmtK(Math.max(0, max - c.usedTokens)) : String(c.left || '').split(' / ')[0];
+        const parts = [['Input', c.inputTokens], ['Cache read', c.cacheReadTokens], ['Output', c.outputTokens], ['Thinking', c.thinkingTokens]].filter(p => p[1]);
+        const hint = full ? (c.source === 'codex' ? 'Nearly full: start a new session or /compact.' : 'Nearly full: /compact to keep going, /clear for a new task.') : '';
+        const tip = [hint, parts.map(([k, n]) => `${k} ${fmtK(n)}`).join(' · ')].filter(Boolean).join('\n') || null;
+        return h('div', { class: 'ctx', title: tip },
+            h('div', { class: 'ctx-head' },
+                h('span', { class: 'ctx-title' }, 'Context', showModel ? h('span', { class: 'ctx-model' }, c.model) : null),
+                h('span', { class: `ctx-val ${lv}` }, `${pctUsed}%`, h('span', { class: 'muted' }, ` · ${fmtK(c.usedTokens)}${max ? ' / ' + fmtK(max) : ''}`))),
+            meter(pctUsed, lv, null, `Context ${pctUsed}% used`),
+            h('div', { class: 'ctx-foot' },
+                h('span', null, c.windowExact ? 'Session context' : 'Estimated context'),
+                full ? h('span', { class: 'hint warn' }, icon('warn'), '/compact') : h('span', null, `${left} left`)));
     }
 
     function credits(cr) {
         const fmt = n => Number(n).toLocaleString();
         const parts = [];
-        if (cr.prompt) parts.push(`Prompt credits ${fmt(cr.prompt.available)}${cr.prompt.monthly ? ' / ' + fmt(cr.prompt.monthly) : ''}`);
-        if (cr.flow) parts.push(`Flow credits ${fmt(cr.flow.available)}${cr.flow.monthly ? ' / ' + fmt(cr.flow.monthly) : ''}`);
-        return parts.length ? h('div', { class: 'muted small' }, parts.join(' · ')) : null;
-    }
-
-    function cardHeader(id, title, badges) {
-        const open = expanded.has(id);
-        return h('button', { class: 'card-head', 'data-action': 'toggle', 'data-id': id, 'aria-expanded': String(open) },
-            h('span', { class: 'card-title' }, title),
-            h('span', { class: 'badges' }, badges, h('span', { class: `chev${open ? ' up' : ''}`, html: ICON.chevron })));
+        if (cr.prompt) parts.push(['Prompt credits', `${fmt(cr.prompt.available)}${cr.prompt.monthly ? ' / ' + fmt(cr.prompt.monthly) : ''}`]);
+        if (cr.flow) parts.push(['Flow credits', `${fmt(cr.flow.available)}${cr.flow.monthly ? ' / ' + fmt(cr.flow.monthly) : ''}`]);
+        return parts.length ? h('dl', { class: 'kv' }, parts.map(([k, v]) => [h('dt', null, k), h('dd', null, v)])) : null;
     }
 
     function badge(text, cls) {
         return text ? h('span', { class: `badge ${cls || ''}` }, text) : null;
     }
 
+    // Header: product tile, title + one muted meta line, badges, chevron.
+    function cardHead(id, tile, title, meta, badges) {
+        const open = expanded.has(id);
+        return h('button', { class: 'card-head', 'data-action': 'toggle', 'data-id': id, 'aria-expanded': String(open) },
+            h('span', { class: `tile ${tile[1]}`, 'aria-hidden': 'true' }, tile[0]),
+            h('span', { class: 'head-text' },
+                h('span', { class: 'card-title' }, title),
+                meta && meta.length ? h('span', { class: 'card-meta' }, meta.filter(Boolean).map((m, i) => [i ? h('span', { class: 'sep' }, '·') : null, m])) : null),
+            h('span', { class: 'badges' }, badges, h('span', { class: `chev${open ? ' up' : ''}`, html: ICON.chevron })));
+    }
+
+    function card(id, cls, head, summary, body) {
+        const open = expanded.has(id);
+        return h('section', { class: `card ${cls || ''}` }, head,
+            !open && summary ? h('div', { class: 'summary' }, summary) : null,
+            open ? h('div', { class: 'card-body' }, body) : null);
+    }
+
+    function statusDot(text, cls) {
+        return h('span', { class: 'status' }, h('span', { class: `dot ${cls}` }), text);
+    }
+
     function suggestionBanner(sug) {
-        if (!sug) return null;
         const name = sug.betterLabel || sug.betterDisplay;
-        return h('section', { class: 'card suggestion-card' },
-            h('div', { class: 'suggestion-body' },
-                h('div', { class: 'suggestion-title' },
-                    h('span', { class: 'badge warn' }, 'Suggestion'),
-                    h('span', { class: 'suggestion-msg' },
-                        `${sug.poolName} is ${sug.currentPct}% left. `,
-                        h('strong', null, name),
-                        ` has ${sug.betterPct}% available.`)),
-                h('button', { class: 'btn primary small', 'data-action': 'switch', 'data-email': sug.betterEmail }, 'Switch now')));
+        return h('section', { class: 'banner' },
+            icon('warn'),
+            h('span', { class: 'banner-msg' }, `${sug.poolName} is at ${sug.currentPct}% left. `, h('strong', null, name), ` has ${sug.betterPct}%.`),
+            h('button', { class: 'btn primary sm', 'data-action': 'switch', 'data-email': sug.betterEmail }, 'Switch'));
     }
 
     function activeCard(s) {
         const a = s.active;
-        const open = expanded.has('active');
-        const allModels = [...new Set(a.pools.flatMap(p => p.models || []))];
-        const modelsText = allModels.length ? `Models: ${allModels.join(', ')}` : '';
+        const models = [...new Set(a.pools.flatMap(p => p.models || []))];
         const urgent = a.pools.find(p => p.forecast && p.forecast.includes('runs out'));
-        return h('section', { class: 'card active' },
-            cardHeader('active', h('span', null, h('span', { class: 'dot on' }), a.display),
-                [badge(a.label, 'label'), badge('Active', 'on'), badge(a.planName, 'plan')]),
-            !open ? h('div', { class: 'summary' }, a.pools.map(p => h('span', null, `${p.short} ${pctText(p)}`))) : null,
-            open ? h('div', { class: 'details' },
-                a.pools.length ? [
-                    h('div', { class: 'stream-head' },
-                        h('span', null, 'Pool'),
-                        h('span', null, 'Used / Pace / Reset')),
-                    ...a.pools.map(limitRow)
-                ] : h('div', { class: 'muted' }, 'No quota data reported.'),
-                urgent ? h('div', { class: 'row-note' }, urgent.forecast) : null,
-                modelsText ? h('div', { class: 'models-summary', title: modelsText }, modelsText) : null,
-                s.agContext ? contextSpectrum(s.agContext) : null,
-                credits(a.credits)) : null);
+        const summary = agSummary(a);
+        const body = [
+            antigravityLimits(a) || h('div', { class: 'muted' }, 'No quota data reported.'),
+            urgent ? h('div', { class: 'note warn' }, icon('warn'), urgent.forecast) : null,
+            s.agContext ? context(s.agContext, true) : null,
+            (models.length || a.credits.prompt || a.credits.flow) ? h('div', { class: 'card-foot' },
+                credits(a.credits),
+                models.length ? h('div', { class: 'models', title: models.join(', ') }, `Models: ${models.join(', ')}`) : null) : null
+        ];
+        return card('active', 'is-active',
+            cardHead('active', ['AG', 'ag'], 'Antigravity', [statusDot('Active', 'on'), a.display, a.label], [badge(a.planName, 'plan')]),
+            summary, body);
     }
 
-    function toolCard(id, title, dotCls, badges, wins, context, footer) {
-        const open = expanded.has(id);
-        const sum = wins.map(w => h('span', null, `${w.name} ${pctText(w)}`));
-        if (context) sum.push(h('span', null, `ctx ${Math.round(ctxPct(context)[mode()])}% ${mode()}`));
-        return h('section', { class: 'card' },
-            cardHeader(id, h('span', null, h('span', { class: `dot ${dotCls}` }), title), badges),
-            !open ? h('div', { class: 'summary' }, sum) : null,
-            open ? h('div', { class: 'details' },
-                wins.length ? [
-                    h('div', { class: 'stream-head' },
-                        h('span', null, 'Window'),
-                        h('span', null, 'Used / Pace / Reset')),
-                    ...wins.map(limitRow)
-                ] : null,
-                context ? contextSpectrum(context) : null,
-                footer) : null);
+    function toolCard(id, tile, title, meta, badges, wins, ctx, foot) {
+        const items = wins.map(w => [w.name, w]);
+        if (ctx) items.push(['Context', { left: 100 - Math.round(ctx.pct), used: Math.round(ctx.pct), estimated: false }, 'used']);
+        const summary = items.length ? miniGrid(items, Math.min(2, items.length)) : null;
+        const body = [
+            wins.length ? h('div', { class: 'grp' }, groupHead('Usage limits', true), wins.map(limitRow)) : null,
+            ctx ? context(ctx, false) : null,
+            foot
+        ];
+        return card(id, '', cardHead(id, tile, title, meta, badges), summary, body);
     }
 
     function otherCard(a, idx, total) {
         const id = `acc:${a.email}`;
-        const open = expanded.has(id);
-        const rank = typeof idx === 'number' ? badge(`#${idx + 1}`, 'rank') : null;
-        const canUp = typeof idx === 'number' && idx > 0;
-        const canDown = typeof idx === 'number' && typeof total === 'number' && idx < total - 1;
-        return h('section', { class: 'card' },
-            cardHeader(id, h('span', null, h('span', { class: 'dot' }), a.display), [rank, badge(a.label, 'label'), badge(a.planName, 'plan')]),
-            !open ? h('div', { class: 'summary' },
-                a.pools.length ? a.pools.map(p => h('span', null, `${p.short} ${pctText(p)}`)) : h('span', { class: 'muted' }, 'No snapshot yet')) : null,
-            open ? h('div', { class: 'details' },
-                a.pools.length ? [
-                    h('div', { class: 'stream-head' },
-                        h('span', null, 'Pool'),
-                        h('span', null, 'Used / Pace / Reset')),
-                    ...a.pools.map(limitRow)
-                ] : null,
-                h('div', { class: 'muted small' }, a.snapshotAgo ? `Last seen ${a.snapshotAgo}. Values update when this account is active.` : 'Sign in once to capture a snapshot.'),
-                h('div', { class: 'actions' },
-                    h('button', { class: 'btn primary', 'data-action': 'switch', 'data-email': a.email }, 'Switch to this account'),
-                    h('button', { class: 'btn icon', 'data-action': 'moveAccount', 'data-direction': 'up', 'data-email': a.email, disabled: !canUp, title: 'Move up priority' }, '↑'),
-                    h('button', { class: 'btn icon', 'data-action': 'moveAccount', 'data-direction': 'down', 'data-email': a.email, disabled: !canDown, title: 'Move down priority' }, '↓'),
-                    h('button', { class: 'btn', 'data-action': 'rename', 'data-email': a.email }, 'Label'),
-                    h('button', { class: 'btn danger', 'data-action': 'remove', 'data-email': a.email }, 'Remove'))) : null);
+        const ib = (action, ic, label, extra) => h('button', Object.assign({ class: 'btn icon', 'data-action': action, 'data-email': a.email, title: label, 'aria-label': label, html: ICON[ic] }, extra || {}));
+        const summary = a.pools.length ? agSummary(a) : h('span', { class: 'muted' }, 'No snapshot yet');
+        const body = [
+            antigravityLimits(a),
+            h('div', { class: 'muted small' }, a.snapshotAgo ? `Snapshot from ${a.snapshotAgo}. Updates when this account is active.` : 'Sign in once to capture a snapshot.'),
+            h('div', { class: 'acct-actions' },
+                h('button', { class: 'btn primary sm', 'data-action': 'switch', 'data-email': a.email }, 'Switch to account'),
+                h('span', { class: 'spacer' }),
+                ib('moveAccount', 'up', 'Move up', { 'data-direction': 'up', disabled: idx === 0 }),
+                ib('moveAccount', 'down', 'Move down', { 'data-direction': 'down', disabled: idx >= total - 1 }),
+                ib('rename', 'tag', 'Set label'),
+                ib('remove', 'trash', 'Remove account', { class: 'btn icon danger' }))
+        ];
+        return card(id, 'is-other',
+            cardHead(id, ['AG', 'muted'], a.label || a.display, [a.label ? a.display : null, a.snapshotAgo ? `seen ${a.snapshotAgo}` : null], [badge(`#${idx + 1}`, 'rank'), badge(a.planName, 'plan')]),
+            summary, body);
+    }
+
+    function notice(title, text, action) {
+        return h('section', { class: 'card notice' },
+            h('div', { class: 'notice-title' }, title),
+            text ? h('div', { class: 'muted small' }, text) : null,
+            action ? h('div', { class: 'acct-actions' }, action) : null);
     }
 
     function saveView() {
@@ -428,7 +286,7 @@
                 h('div', { class: 'set-title' }, g.title),
                 g.items.map(i => h('label', { class: `set-row${i.disabled ? ' dim' : ''}`, title: i.help },
                     h('span', { class: 'set-label' }, i.label), settingControl(i))))),
-            h('div', { class: 'actions' }, h('button', { class: 'btn', 'data-action': 'openSettings' }, 'All settings in VS Code'))
+            h('div', { class: 'acct-actions' }, h('button', { class: 'btn', 'data-action': 'openSettings' }, 'All settings in VS Code'))
         ];
     }
 
@@ -443,7 +301,7 @@
             root.replaceChildren(...settingsPanel(s));
             return;
         }
-        const body = [svgDefs()];
+        const body = [];
         if (s.snoozed) {
             body.push(h('div', { class: 'muted small snoozed' }, 'Alerts snoozed for up to 1 hour. ',
                 h('button', { class: 'link', 'data-action': 'snooze' }, 'Resume')));
@@ -451,40 +309,40 @@
         if (s.suggestion) body.push(suggestionBanner(s.suggestion));
         if (s.active) body.push(activeCard(s));
         if (s.claude.show) {
-            const extra = s.claude.usageEnabled
+            const foot = s.claude.usageEnabled
                 ? (s.claude.usageError ? h('div', { class: 'muted small' }, s.claude.usageError + (s.claude.usageAgo ? `. Showing values from ${s.claude.usageAgo}.` : '')) : null)
-                : h('div', { class: 'actions' }, h('button', { class: 'btn', 'data-action': 'enableClaudeLimits' }, 'Show 5-hour and weekly limits'));
-            body.push(toolCard('claude', 'Claude Code', 'cc', [badge('CLI', 'cc')], s.claude.windows, s.claude.context, extra));
+                : h('div', { class: 'acct-actions' }, h('button', { class: 'btn sm', 'data-action': 'enableClaudeLimits' }, 'Show 5-hour and weekly limits'));
+            const ctx = s.claude.context;
+            body.push(toolCard('claude', ['CC', 'cc'], 'Claude Code', [ctx ? ctx.model : 'CLI'], [], s.claude.windows, ctx, foot));
         }
         if (s.codex.show) {
-            const info = s.codex.idle
-                ? `Codex not used for ${s.codex.lastUsedAgo.replace(/ ago$/, '')}. Hidden from the status bar until it runs again.`
-                : [s.codex.credits, s.codex.windows.length ? `Limits as of ${s.codex.asOfAgo}` : ''].filter(Boolean).join(' · ');
-            body.push(toolCard('codex', 'Codex', 'cx', [badge(s.codex.idle ? 'Idle' : '', 'plan'), badge(s.codex.plan, 'plan'), badge('CLI', 'cx')], s.codex.windows, s.codex.context,
+            const cx = s.codex;
+            const info = cx.idle
+                ? `Not used for ${cx.lastUsedAgo.replace(/ ago$/, '')}. Hidden from the status bar until it runs again.`
+                : [cx.credits, cx.windows.length ? `Limits as of ${cx.asOfAgo}` : ''].filter(Boolean).join(' · ');
+            const meta = [cx.idle ? statusDot('Idle', 'idle') : null, cx.context ? cx.context.model : 'CLI'];
+            body.push(toolCard('codex', ['CX', 'cx'], 'Codex', meta, [badge(cx.plan, 'plan')], cx.windows, cx.context,
                 info ? h('div', { class: 'muted small' }, info) : null));
         }
         // Missing Antigravity goes below the tools that have data; nothing at all when it is turned off.
         const agOn = s.antigravityEnabled !== false;
         if (agOn && !s.active && s.connecting) {
-            body.push(h('section', { class: 'card notice' }, h('div', { class: 'muted small' }, 'Looking for Antigravity...')));
+            body.push(notice('Looking for Antigravity...', '', null));
         } else if (agOn && !s.active) {
-            body.push(h('section', { class: 'card notice' },
-                h('strong', null, 'Antigravity not detected'),
-                h('div', { class: 'muted small' }, 'Start agy or the Antigravity IDE. Quota Nexus connects to its local server automatically.'),
-                h('div', { class: 'actions' }, h('button', { class: 'btn', 'data-action': 'diagnostics' }, 'Show diagnostics'))));
+            body.push(notice('Antigravity not detected', 'Start agy or the Antigravity IDE. Quota Nexus connects to its local server automatically.',
+                h('button', { class: 'btn sm', 'data-action': 'diagnostics' }, 'Show diagnostics')));
         }
         if (agOn) {
-            body.push(h('div', { class: 'section-label' }, `Other Antigravity accounts (${s.others.length})`));
+            body.push(h('div', { class: 'section-label' }, 'Other accounts', h('span', { class: 'count' }, String(s.others.length))));
             body.push(...s.others.map((a, i) => otherCard(a, i, s.others.length)));
-            body.push(h('button', { class: 'btn wide', 'data-action': 'signIn' }, 'Sign in with another account'));
+            body.push(h('button', { class: 'btn ghost wide', 'data-action': 'signIn' }, icon('plus'), 'Sign in with another account'));
         }
         if (!body.length) {
-            body.push(h('section', { class: 'card notice' },
-                h('div', { class: 'muted small' }, 'Every tool is turned off or has no data yet.'),
-                h('div', { class: 'actions' }, h('button', { class: 'btn', 'data-action': 'toggleSettings' }, 'Open settings'))));
+            body.push(notice('Nothing to show', 'Every tool is turned off or has no data yet.',
+                h('button', { class: 'btn sm', 'data-action': 'toggleSettings' }, 'Open settings')));
         }
-        body.push(h('footer', { class: 'muted small' },
-            `Updated ${s.updatedAgo} · Unofficial · Local data only · `,
+        body.push(h('footer', null,
+            `Updated ${s.updatedAgo}`, h('span', { class: 'sep' }, '·'), 'Local data only', h('span', { class: 'sep' }, '·'),
             h('button', { class: 'link', 'data-action': 'diagnostics' }, 'Diagnostics')));
 
         root.replaceChildren(...body);
@@ -492,7 +350,7 @@
 
     root.addEventListener('click', (e) => {
         const el = e.target instanceof Element ? e.target.closest('[data-action]') : null;
-        if (!el) return;
+        if (!el || el.hasAttribute('disabled')) return;
         const action = el.getAttribute('data-action');
         if (action === 'toggle') {
             const id = el.getAttribute('data-id');

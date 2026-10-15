@@ -171,6 +171,7 @@ class Nexus {
         const agyTask = (async () => {
             if (!this.agEnabled()) return { s: null, ctx: null };
             const s = await this.agy.getStatus();
+            if (s) s.limits = await this.agy.getLimits(s).catch(() => null);
             const ctx = s && this.wantAgContext() ? await this.agy.getContext(ws, s.modelLabels).catch(() => null) : null;
             return { s, ctx };
         })().catch(e => {
@@ -499,6 +500,7 @@ class Nexus {
             `  processes found: ${d.processes}, ports probed: ${d.probed}, last discovery: ${formatAgo(d.lastDiscoveryAt)}`,
             `  last success: ${formatAgo(d.lastOkAt)}${d.lastError ? `, last problem: ${d.lastError}` : ''}`,
             `  agy CLI in ~/.gemini/bin: ${this.agyPath() ? 'found' : 'not found'}`,
+            `  5-hour / weekly limits: ${d.limits}`,
             `Claude Code logs (~/.claude/projects): ${exists(['.claude', 'projects'])}, session: ${this.ccContext ? 'found' : 'none'}`,
             `Claude Code limits: ${cfg.get('claudeCode.fetchUsageLimits', false) ? (this.ccUsageError || (this.ccUsage ? 'ok' : 'pending')) : 'off (opt-in)'}${this.ccUsageUntil > Date.now() ? `, next try in ${formatCountdown(new Date(this.ccUsageUntil).toISOString())}` : ''}`,
             `Codex logs (~/.codex/sessions): ${exists(['.codex', 'sessions'])}, session: ${this.codexData && this.codexData.context ? 'found' : 'none'}, limits: ${this.codexData && this.codexData.limits ? 'found' : 'none'}`,

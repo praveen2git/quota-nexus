@@ -233,7 +233,62 @@ function parseGeneratorMetadata(data, modelLabels, picked) {
     };
 }
 
+const WINDOW_ORDER = ['5-hour', 'Daily', 'Weekly'];
+
+// "Five Hour Limit Remaining" or a window like "18000s" -> "5-hour".
+function windowName(label, window) {
+    const secs = /^(\d+)s$/.exec(window || '');
+    const s = secs ? { 18000: '5-hour', 86400: 'Daily', 604800: 'Weekly' }[secs[1]] : '';
+    if (/five[\s-]*hour|\b5[\s-]*h/i.test(label)) return '5-hour';
+    if (/week|\b7[\s-]*d/i.test(label)) return 'Weekly';
+    if (/daily|\bday\b|24[\s-]*h/i.test(label)) return 'Daily';
+    return s || label.replace(/\s*limit\s*(remaining)?\s*$/i, '').trim() || 'Limit';
+}
+
+// RetrieveUserQuotaSummary: per-group 5-hour / weekly buckets, as in Antigravity's View Usage.
+function parseQuotaSummary(raw) {
+    const r = raw && raw.response;
+    if (!r || typeof r !== 'object') return null;
+    let groups = Array.isArray(r.groups) ? r.groups : [];
+    if (!groups.length && Array.isArray(r.buckets)) groups = [{ displayName: 'Antigravity', buckets: r.buckets }];
+    const usedIds = new Set();
+    const out = [];
+    for (const g of groups) {
+        if (!g || typeof g !== 'object') continue;
+        const name = str(g.displayName, 100) || 'Models';
+        let id = slug(name);
+        while (usedIds.has(id)) id += '-x';
+        usedIds.add(id);
+        const windows = [];
+        for (const b of Array.isArray(g.buckets) ? g.buckets : []) {
+            if (!b || typeof b !== 'object' || b.disabled === true) continue;
+            if (typeof b.remainingFraction !== 'number' || !isFinite(b.remainingFraction)) continue;
+            const wName = windowName(str(b.displayName, 100), str(b.window, 40));
+            let wid = `${id}-${slug(wName)}`;
+            while (windows.some(w => w.id === wid)) wid += '-x';
+            windows.push({
+                id: wid,
+                name: wName,
+                remainingPct: Math.round(Math.max(0, Math.min(1, b.remainingFraction)) * 100),
+                resetTime: typeof b.resetTime === 'string' && !isNaN(Date.parse(b.resetTime)) ? b.resetTime : null
+            });
+        }
+        const rank = w => (WINDOW_ORDER.indexOf(w.name) + 1) || 99;
+        windows.sort((a, b) => rank(a) - rank(b));
+        if (windows.length) out.push({ id, name, windows });
+    }
+    return out.length ? out : null;
+}
+
+// A pool's left % is its group's tightest limit; no match means stale or another account's limits.
+function limitsMatch(pools, groups) {
+    if (!groups || !groups.length || !pools || !pools.length) return true;
+    const mins = groups.map(g => Math.min(...g.windows.map(w => w.remainingPct)));
+    return pools.every(p => mins.some(m => Math.abs(m - p.remainingPct) <= 3));
+}
+
 module.exports = {
     parseUserStatus, parseProcessLines, parseNetstatListening, parseLsofListening,
-    pickTrajectory, parseGeneratorMetadata, familyOf, orderPorts, newestFirst, etimeMs
+    pickTrajectory, parseGeneratorMetadata, familyOf, orderPorts, newestFirst, etimeMs,
+    parseQuotaSummary, limitsMatch
 };

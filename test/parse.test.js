@@ -127,3 +127,30 @@ test('process start times are read on Windows and Unix, and the newest server wi
     assert.strictEqual(etimeMs('05:09'), 309e3);
     assert.strictEqual(etimeMs('garbage'), null);
 });
+
+test('parseQuotaSummary reads 5-hour and weekly buckets per model group', () => {
+    const b = (displayName, remainingFraction, resetTime, extra) => ({ displayName, remainingFraction, resetTime, ...extra });
+    const raw = { response: { groups: [
+        { displayName: 'Gemini Models', buckets: [b('Weekly Limit Remaining', 0.97, '2026-10-22T08:00:00Z'), b('Five Hour Limit Remaining', 0.86, '2026-10-15T17:00:00Z')] },
+        { displayName: 'Claude and GPT models', buckets: [b('', 0.18, '2026-10-16T10:00:00Z', { window: '604800s' }), b('Off', 1, null, { disabled: true }), b('No fraction')] },
+        { displayName: 'Empty', buckets: [] }
+    ] } };
+    const g = p.parseQuotaSummary(raw);
+    assert.deepStrictEqual(g.map(x => [x.id, x.name, x.windows.map(w => [w.id, w.name, w.remainingPct])]), [
+        ['gemini-models', 'Gemini Models', [['gemini-models-5-hour', '5-hour', 86], ['gemini-models-weekly', 'Weekly', 97]]],
+        ['claude-and-gpt-models', 'Claude and GPT models', [['claude-and-gpt-models-weekly', 'Weekly', 18]]]
+    ]);
+    assert.strictEqual(g[0].windows[0].resetTime, '2026-10-15T17:00:00Z');
+    assert.strictEqual(p.parseQuotaSummary({ response: { buckets: [b('Five Hour Limit Remaining', 2)] } })[0].windows[0].remainingPct, 100);
+    assert.strictEqual(p.parseQuotaSummary({}), null);
+    assert.strictEqual(p.parseQuotaSummary({ response: { groups: 'x' } }), null);
+});
+
+test('limitsMatch rejects limits that belong to another account', () => {
+    const g = (a, b) => ({ windows: [{ remainingPct: a }, { remainingPct: b }] });
+    const groups = [g(86, 97), g(93, 18)];
+    assert.strictEqual(p.limitsMatch([{ remainingPct: 86 }, { remainingPct: 18 }], groups), true);
+    assert.strictEqual(p.limitsMatch([{ remainingPct: 100 }, { remainingPct: 100 }], groups), false);
+    assert.strictEqual(p.limitsMatch([], groups), true);
+    assert.strictEqual(p.limitsMatch([{ remainingPct: 50 }], null), true);
+});

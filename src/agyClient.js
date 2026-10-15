@@ -4,13 +4,16 @@ const http = require('http');
 const { execFile } = require('child_process');
 const {
     parseUserStatus, parseProcessLines, parseNetstatListening, parseLsofListening,
-    pickTrajectory, parseGeneratorMetadata, orderPorts, newestFirst
+    pickTrajectory, parseGeneratorMetadata, orderPorts, newestFirst, parseQuotaSummary, limitsMatch
 } = require('./parse');
 
 const META = { metadata: { ideName: 'antigravity', extensionName: 'antigravity', locale: 'en' } };
 const RPC_PATH = '/exa.language_server_pb.LanguageServerService/';
 const DISCOVERY_BACKOFF_MS = 20000;
 const REDISCOVER_MS = 5 * 60000;
+// The summary goes through to Google, so ask at most this often.
+const LIMITS_MIN_GAP_MS = 2 * 60000;
+const LIMITS_RETRY_MS = 30000;
 const MAX_BODY_BYTES = 5 * 1024 * 1024;
 const IS_WIN = process.platform === 'win32';
 
@@ -92,9 +95,10 @@ class AgyClient {
         this.discovering = null;
         this.lastFailedDiscovery = 0;
         this.ctxCache = null;
+        this.limitsCache = null;
         this.others = [];
         this.lastDiscoveryAt = 0;
-        this.diag = { lastOkAt: 0, lastError: '', processes: 0, probed: 0, lastDiscoveryAt: 0 };
+        this.diag = { lastOkAt: 0, lastError: '', processes: 0, probed: 0, lastDiscoveryAt: 0, limits: 'not asked yet' };
     }
 
     fail(msg) {
@@ -181,6 +185,32 @@ class AgyClient {
             this.fail('server answered without user status');
         }
         return parsed;
+    }
+
+    // 5-hour and weekly limits per model group; keeps the last good answer on errors.
+    async getLimits(status) {
+        const s = this.server;
+        if (!s || !status) return null;
+        const key = `${s.pid}|${String(status.email || '').toLowerCase()}`;
+        const now = Date.now();
+        const c = this.limitsCache && this.limitsCache.key === key ? this.limitsCache : null;
+        const bad = r => !!r && !limitsMatch(status.pools, r);
+        if (c && now - c.at < (bad(c.result) ? LIMITS_RETRY_MS : LIMITS_MIN_GAP_MS)) return bad(c.result) ? null : c.result;
+        // agy can hand back the previous account's summary after a switch, so skip its cache then.
+        const force = !c || bad(c.result);
+        let result = c ? c.result : null;
+        try {
+            result = parseQuotaSummary(await rpc(s.port, s.csrf, 'RetrieveUserQuotaSummary', force ? { forceRefresh: true } : {}, 8000));
+            this.diag.limits = result ? `ok (${result.map(g => `${g.name}: ${g.windows.map(w => w.name).join(', ')}`).join('; ')})` : 'answered with no limits';
+        } catch (e) {
+            const msg = `failed (${e.message})`;
+            if (this.diag.limits !== msg) this.log.info(`Antigravity limits: ${msg}`);
+            this.diag.limits = msg;
+        }
+        this.limitsCache = { key, at: now, result };
+        if (!bad(result)) return result;
+        this.diag.limits = 'ignored: they do not match this account\'s quota (retrying)';
+        return null;
     }
 
     async getContext(wsPaths, modelLabels) {

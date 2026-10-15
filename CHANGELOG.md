@@ -3,10 +3,23 @@
 ## [1.2.8] - 2026-10-15
 
 ### Added
+- **Antigravity 5-hour and weekly limits.** Antigravity now shows both limits for each model group (Gemini, Claude), the same numbers as Antigravity's **View Usage**: on the dashboard, in the status bar hover, and in the status bar itself (each group shows its tighter limit). Nexus asks the local agy server at most every 2 minutes. If agy does not report them, you see one value per pool as before.
 - **Smart alternate-account suggestion banner.** When the active Antigravity account runs low on quota, Quota Nexus checks your saved account snapshots and suggests switching to an account with healthy quota (e.g. 100% available) with a 1-click **Switch now** button.
-- **Detailed token breakdown in context meters.** Context cards and status bar hover tooltips now break down input, cache read, thinking/reasoning, and output tokens.
-- **Quota drain velocity indicator.** Quota cards display the burn velocity (e.g. `↓ 12%/hr`) next to run-out forecasts.
+- **Token breakdown for the context window.** Hover a context meter to see input, cache read, thinking and output tokens.
+- **Quota drain velocity.** Hover a limit to see how fast it is being used (e.g. `↓ 12%/hr`) next to the run-out forecast.
 - **Saved accounts priority reordering.** Move other Antigravity accounts up and down with priority rankings (`#1`, `#2`) to customize your fallback order in the switch list.
+- **Pace marker.** A tick on each limit bar shows how much of the time window has passed, so you can see if you are using it faster than it resets.
+
+### Changed
+- **Cleaner dashboard.** Each card has a product tile, one info line and its plan. Open cards show one row per limit (bar, percent, time to reset). Collapsed cards show every limit in a tidy two-column grid with small bars.
+- **Clearer names.** "Gemini" and "Claude" replace "Gem" and "Cl/GPT" on the dashboard and in the status bar.
+- **Status colours no longer depend on the theme.** Bars are blue when fine, amber when tight and red when low, with a warning icon, in every theme.
+- The "Used / Left" column header and the pace marker follow the **Percent mode** setting.
+
+### Fixed
+- **No more limits from the wrong account.** Right after a switch, agy could still report the previous account's 5-hour and weekly numbers. Nexus now asks agy for fresh numbers when the account changes, and ignores any that do not match the account's own quota.
+- Codex windows reported as 299 or 10079 minutes now read **5-hour** and **Weekly** instead of "299-min" and "10079-min".
+- The context meter shows the full window size again (for example `162.4K / 1M`).
 
 ## [1.2.7] - 2026-10-15
 

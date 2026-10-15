@@ -39,7 +39,8 @@ class Accounts {
         acc.name = status.name;
         acc.planName = status.planName;
         acc.lastActive = now;
-        acc.snapshot = { pools: status.pools, credits: status.credits, capturedAt: now };
+        const limits = status.limits || (acc.snapshot && acc.snapshot.limits) || null;
+        acc.snapshot = { pools: status.pools, limits, credits: status.credits, capturedAt: now };
         if (changed || now - this.lastSaved > SAVE_EVERY_MS) this.save();
     }
 

@@ -1,7 +1,7 @@
 'use strict';
 
 const vscode = require('vscode');
-const { textBar, escapeMarkdown: esc, formatTokens } = require('./util');
+const { textBar, escapeMarkdown: esc, formatTokens, friendlyGroup } = require('./util');
 
 const FOCUS_CMD = 'quotaNexus.dashboard.focus';
 const TOGGLE_CMD = 'quotaNexus.togglePercentMode';
@@ -42,8 +42,19 @@ function barPct(x, mode, format) {
     return pctOf(x, mode) + (format === 'descriptive' ? '' : MARK[mode]);
 }
 
-function poolsText(pools, format, mode) {
-    const items = pools.map(p => `${format === 'descriptive' ? p.name : p.short} ${barPct(p, mode, format)}`);
+// One value per model group: its tightest limit (5-hour or weekly), else the pool itself.
+function agItems(a) {
+    if (a.limits && a.limits.length) {
+        return a.limits.map(g => {
+            const w = g.windows.reduce((t, x) => (x.left < t.left ? x : t));
+            return { name: g.short, used: w.used, left: w.left, estimated: w.estimated };
+        });
+    }
+    return a.pools.map(p => ({ ...p, name: friendlyGroup(p.name) }));
+}
+
+function poolsText(items, format, mode) {
+    items = items.map(p => `${p.name} ${barPct(p, mode, format)}`);
     if (format === 'minimal') return items.join(' | ');
     if (format === 'compact') return 'AG: ' + items.join(' · ');
     return `Antigravity: ${items.join(' · ')} ${mode}`;
@@ -82,6 +93,25 @@ function limitTable(md, title, windows, note, mode, first) {
     }
     md.appendMarkdown('\n');
     forecastLines(md, windows);
+}
+
+// 5-hour / weekly per model group, as on the dashboard; pools when agy reports no limits.
+function agSection(md, a, mode) {
+    md.appendMarkdown(`### Antigravity\n\n${esc(a.display)} · **${esc(a.planName)}**\n\n`);
+    const pools = a.pools.map(p => ({ ...p, name: friendlyGroup(p.name) }));
+    if (a.limits && a.limits.length) {
+        md.appendMarkdown(`| Model | Window | | ${heading(mode)} | Resets |\n|:--|:--|:--|--:|--:|\n`);
+        for (const g of a.limits) {
+            g.windows.forEach((w, i) => md.appendMarkdown(`| ${i === 0 ? `**${esc(g.short)}**` : ''} | ${esc(w.name)} | ${textBar(w[mode])} | ${bothCell(w, mode)} | ${esc(resetText(w, w.left >= 100 && !w.estimated))} |\n`));
+        }
+    } else {
+        md.appendMarkdown(`| Model | | ${heading(mode)} | Resets |\n|:--|:--|--:|--:|\n`);
+        for (const p of pools) {
+            md.appendMarkdown(`| **${esc(p.name)}** | ${textBar(p[mode])} | ${bothCell(p, mode)} | ${esc(resetText(p, p.pct >= 100))} |\n`);
+        }
+    }
+    md.appendMarkdown('\n');
+    forecastLines(md, pools);
 }
 
 // Context pct is "used"; derive both so it follows Percent Mode like quotas.
@@ -130,7 +160,7 @@ class StatusBar {
         if (!opt.show) return item.hide();
         const mode = v.percentMode === 'left' ? 'left' : 'used';
         const parts = [];
-        if (opt.showAgUsage !== false && v.active && v.active.pools.length) parts.push(poolsText(v.active.pools, opt.format, mode));
+        if (opt.showAgUsage !== false && v.active && v.active.pools.length) parts.push(poolsText(agItems(v.active), opt.format, mode));
         if (opt.showClaudeUsage && v.claude.windows.length) parts.push(limitText('CC', v.claude.windows, opt.format, mode));
         if (opt.showCodexUsage && v.codex.windows.length && !v.codex.idle) parts.push(limitText('CX', v.codex.windows, opt.format, mode));
         const prefix = opt.showEmail && v.active ? `${stripIcons(v.active.display)} | ` : '';
@@ -144,15 +174,7 @@ class StatusBar {
                 : v.minPct <= warn ? new vscode.ThemeColor('statusBarItem.warningBackground') : undefined;
 
         const md = tooltip();
-        if (v.active) {
-            md.appendMarkdown(`### Antigravity quota\n\n${esc(v.active.display)} · **${esc(v.active.planName)}**\n\n`);
-            md.appendMarkdown(`| Pool | | ${heading(mode)} | Resets |\n|:--|:--|--:|--:|\n`);
-            for (const p of v.active.pools) {
-                md.appendMarkdown(`| **${esc(p.name)}** | ${textBar(p[mode])} | ${bothCell(p, mode)} | ${esc(resetText(p, p.pct >= 100))} |\n`);
-            }
-            md.appendMarkdown('\n');
-            forecastLines(md, v.active.pools);
-        }
+        if (v.active) agSection(md, v.active, mode);
         // Tools with data first; anything missing or idle goes in the notes at the bottom.
         let first = !v.active;
         const section = (title, wins, note) => {

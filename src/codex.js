@@ -8,9 +8,11 @@ const { contextWindowFor, formatTokens, pathsOverlap, clampPct } = require('./ut
 const RECENT_FILES = 12;
 const HEAD_BYTES = 16 * 1024;
 
+// Codex sometimes reports 299 / 10079 minutes, so snap to the nearest whole hour.
 function windowName(minutes) {
-    const m = Number(minutes);
+    let m = Number(minutes);
     if (!m) return 'Limit';
+    if (Math.abs(m - Math.round(m / 60) * 60) <= 1) m = Math.round(m / 60) * 60;
     if (m === 10080) return 'Weekly';
     if (m < 1440 && m % 60 === 0) return `${m / 60}-hour`;
     if (m % 1440 === 0) return `${m / 1440}-day`;
