@@ -56,6 +56,17 @@ class Accounts {
         this.save();
     }
 
+    move(email, direction) {
+        const e = String(email || '').toLowerCase();
+        const idx = this.list.findIndex(a => a.email.toLowerCase() === e);
+        if (idx === -1) return;
+        const target = direction === 'up' ? idx - 1 : idx + 1;
+        if (target < 0 || target >= this.list.length) return;
+        const item = this.list.splice(idx, 1)[0];
+        this.list.splice(target, 0, item);
+        this.save();
+    }
+
     save() {
         this.lastSaved = Date.now();
         return this.m.update(KEY, this.list);

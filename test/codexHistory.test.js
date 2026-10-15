@@ -110,6 +110,7 @@ test('forecast predicts run-out, lasts-until-reset and needs enough data', () =>
     const end = NOW + 40 * MIN;
     const f = forecast(pts, 40, '2026-10-15T00:00:00Z', end);
     assert.strictEqual(f.status, 'runsOut');
+    assert.ok(f.drainPerHour > 0);
     assert.ok(Math.abs(f.at - (end + 80 * MIN)) < 2 * MIN);
     assert.strictEqual(forecast(pts, 40, new Date(end + 30 * MIN).toISOString(), end).status, 'lasts');
     assert.strictEqual(forecast(pts.slice(0, 1), 40, null, NOW + 5 * MIN), null);

@@ -76,6 +76,8 @@ function buildCodexContext(parsed, mtime) {
         pct: Math.min(100, Math.round((usedTokens / windowTokens) * 1000) / 10),
         inputTokens: last.input_tokens || 0,
         cacheReadTokens: last.cached_input_tokens || 0,
+        outputTokens: last.output_tokens || 0,
+        thinkingTokens: last.reasoning_output_tokens || 0,
         left: `${formatTokens(Math.max(0, windowTokens - usedTokens))} / ${formatTokens(windowTokens)}`,
         timestamp: t.ts || mtime
     };

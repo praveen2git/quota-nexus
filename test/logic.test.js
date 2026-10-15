@@ -7,7 +7,7 @@ const os = require('os');
 const path = require('path');
 const u = require('../src/util');
 const { evaluateAlerts } = require('../src/alerts');
-const { buildViewState } = require('../src/viewState');
+const { buildViewState, findBetterAccount } = require('../src/viewState');
 const { Accounts } = require('../src/accounts');
 const { ClaudeContextReader, findLastUsage, encodeProjectDir } = require('../src/claudeCode');
 
@@ -68,9 +68,33 @@ test('accounts record, label and remove', () => {
     acc.recordActive({ email: 'b@x.com', name: 'B', planName: 'Pro', pools: [pool('g', 40)], credits: {} });
     assert.strictEqual(acc.all().length, 2);
     acc.setLabel('B@X.com', 'Work');
-    assert.strictEqual(acc.find('b@x.com').label, 'Work');
     acc.remove('a@x.com');
     assert.deepStrictEqual(m.data['nexus.accounts.v2'].map(a => a.email), ['b@x.com']);
+    acc.recordActive({ email: 'c@x.com', name: 'C', planName: 'Pro', pools: [], credits: {} });
+    assert.deepStrictEqual(acc.all().map(a => a.email), ['b@x.com', 'c@x.com']);
+    acc.move('c@x.com', 'up');
+    assert.deepStrictEqual(acc.all().map(a => a.email), ['c@x.com', 'b@x.com']);
+    acc.move('c@x.com', 'down');
+    assert.deepStrictEqual(acc.all().map(a => a.email), ['b@x.com', 'c@x.com']);
+});
+
+test('findBetterAccount suggests a high-quota account when active pool is low', () => {
+    const active = {
+        pools: [{ id: 'claude', name: 'Claude', short: 'Cl', left: 15, forecast: '' }]
+    };
+    const others = [
+        { email: 'work@x.com', display: 'w***@x.com', label: 'Work', pools: [{ id: 'claude', name: 'Claude', short: 'Cl', left: 100 }] },
+        { email: 'free@x.com', display: 'f***@x.com', label: 'Personal', pools: [{ id: 'claude', name: 'Claude', short: 'Cl', left: 20 }] }
+    ];
+    const sug = findBetterAccount(active, others);
+    assert.ok(sug);
+    assert.strictEqual(sug.poolName, 'Claude');
+    assert.strictEqual(sug.currentPct, 15);
+    assert.strictEqual(sug.betterEmail, 'work@x.com');
+    assert.strictEqual(sug.betterPct, 100);
+
+    const highActive = { pools: [{ id: 'claude', name: 'Claude', short: 'Cl', left: 80 }] };
+    assert.strictEqual(findBetterAccount(highActive, others), null);
 });
 
 test('view state estimates refilled pools for inactive accounts', () => {

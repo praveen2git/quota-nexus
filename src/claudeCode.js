@@ -52,6 +52,8 @@ function buildContext(found, mtime) {
     const inputTokens = n(u.input_tokens);
     const cacheRead = n(u.cache_read_input_tokens);
     const cacheCreation = n(u.cache_creation_input_tokens);
+    const outputTokens = n(u.output_tokens);
+    const thinkingTokens = n(u.thinking_tokens || (u.reasoning_tokens || 0));
     const usedTokens = inputTokens + cacheRead + cacheCreation;
     const windowTokens = contextWindowFor(found.model);
     return {
@@ -63,6 +65,8 @@ function buildContext(found, mtime) {
         inputTokens,
         cacheReadTokens: cacheRead,
         cacheCreationTokens: cacheCreation,
+        outputTokens,
+        thinkingTokens,
         left: `${formatTokens(Math.max(0, windowTokens - usedTokens))} / ${formatTokens(windowTokens)}`,
         timestamp: found.timestamp || mtime
     };

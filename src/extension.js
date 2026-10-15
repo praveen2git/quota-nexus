@@ -403,6 +403,12 @@ class Nexus {
                 this.accounts.remove(acc.email);
                 return this.render();
             }
+            case 'moveAccount': {
+                if (!acc) return;
+                const dir = msg.direction === 'up' ? 'up' : 'down';
+                this.accounts.move(acc.email, dir);
+                return this.render();
+            }
             default:
         }
     }

@@ -64,11 +64,12 @@ function forecast(points, pctLeft, resetTime, now = Date.now()) {
         den += (x - mx) * (x - mx);
     }
     const slope = den ? num / den : 0;
-    if (slope >= 0) return { status: 'steady' };
+    if (slope >= 0) return { status: 'steady', drainPerHour: 0 };
+    const drainPerHour = Math.round(-slope * 3600e3 * 10) / 10;
     const runOutAt = now + pctLeft / -slope;
     const resetMs = Date.parse(resetTime || '');
-    if (!isNaN(resetMs) && runOutAt >= resetMs) return { status: 'lasts', resetAt: resetMs };
-    return { status: 'runsOut', at: runOutAt };
+    if (!isNaN(resetMs) && runOutAt >= resetMs) return { status: 'lasts', resetAt: resetMs, drainPerHour };
+    return { status: 'runsOut', at: runOutAt, drainPerHour };
 }
 
 const SPARK_MIN_POINTS = 4;

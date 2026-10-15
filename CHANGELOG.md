@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.8] - 2026-10-15
+
+### Added
+- **Smart alternate-account suggestion banner.** When the active Antigravity account runs low on quota, Quota Nexus checks your saved account snapshots and suggests switching to an account with healthy quota (e.g. 100% available) with a 1-click **Switch now** button.
+- **Detailed token breakdown in context meters.** Context cards and status bar hover tooltips now break down input, cache read, thinking/reasoning, and output tokens.
+- **Quota drain velocity indicator.** Quota cards display the burn velocity (e.g. `↓ 12%/hr`) next to run-out forecasts.
+- **Saved accounts priority reordering.** Move other Antigravity accounts up and down with priority rankings (`#1`, `#2`) to customize your fallback order in the switch list.
+
 ## [1.2.7] - 2026-10-15
 
 ### Changed

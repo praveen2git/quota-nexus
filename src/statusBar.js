@@ -98,7 +98,10 @@ function contextRows(md, c, mode) {
     md.appendMarkdown('| | |\n|:--|--:|\n');
     md.appendMarkdown(`| ${textBar(n[mode], 16)} | **${n[mode].toFixed(1)}%** ${mode} (${n[o].toFixed(1)}% ${o}) |\n`);
     md.appendMarkdown(`| Used | ${formatTokens(c.usedTokens)} |\n`);
+    if (c.inputTokens) md.appendMarkdown(`| Input | ${formatTokens(c.inputTokens)} |\n`);
     if (c.cacheReadTokens) md.appendMarkdown(`| From cache | ${formatTokens(c.cacheReadTokens)} |\n`);
+    if (c.thinkingTokens) md.appendMarkdown(`| Thinking | ${formatTokens(c.thinkingTokens)} |\n`);
+    if (c.outputTokens) md.appendMarkdown(`| Output | ${formatTokens(c.outputTokens)} |\n`);
     md.appendMarkdown(`| Left${c.windowExact ? '' : ' (est.)'} | ${esc(c.left)} |\n\n`);
     if (c.pct >= 80) {
         md.appendMarkdown(c.source === 'codex'
