@@ -15,6 +15,7 @@
 - **Clearer names.** "Gemini" and "Claude" replace "Gem" and "Cl/GPT" on the dashboard and in the status bar.
 - **Status colours no longer depend on the theme.** Bars are blue when fine, amber when tight and red when low, with a warning icon, in every theme.
 - The "Used / Left" column header and the pace marker follow the **Percent mode** setting.
+- New README screenshots of the dashboard (open and collapsed) and the hover.
 
 ### Fixed
 - **No more limits from the wrong account.** Right after a switch, agy could still report the previous account's 5-hour and weekly numbers. Nexus now asks agy for fresh numbers when the account changes, and ignores any that do not match the account's own quota.

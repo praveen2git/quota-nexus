@@ -88,13 +88,13 @@
     // Collapsed view: equal-width cells (name, value, thin bar) so every card reads the same way.
     function miniGrid(items, cols) {
         const m = mode();
-        const grid = h('div', { class: 'mini-grid' }, items.map(([label, x, unit], i) => {
+        const grid = h('div', { class: 'mini-grid' }, items.map(([label, x, unit, short], i) => {
             const u = unit || m;
             const pct = Math.max(0, Math.min(100, Math.round(x[u])));
             const lv = level(x.left);
             return h('div', { class: `mini${i === items.length - 1 && i % cols === 0 ? ' full' : ''}`, title: `${label}: ${x.estimated ? '~' : ''}${pct}% ${u}` },
                 h('div', { class: 'mini-top' },
-                    h('span', { class: 'mini-k' }, label),
+                    h('span', { class: 'mini-k' }, h('span', { class: 'lf' }, label), short ? h('span', { class: 'ls' }, short) : null),
                     h('span', { class: `mini-v ${lv}` }, `${x.estimated ? '~' : ''}${pct}%`, h('span', { class: 'mini-u' }, ` ${u}`))),
                 meter(pct, lv, null, `${label} ${pct}% ${u}`));
         }));
@@ -105,7 +105,7 @@
     function agSummary(a) {
         if (a.limits && a.limits.length) {
             const cols = Math.max(...a.limits.map(g => g.windows.length));
-            return miniGrid(a.limits.flatMap(g => g.windows.map(w => [`${groupShort(g.name)} ${w.name}`, w])), cols);
+            return miniGrid(a.limits.flatMap(g => g.windows.map(w => [`${groupShort(g.name)} ${w.name}`, w, null, `${groupShort(g.name)} ${{ '5-hour': '5h', Weekly: 'wk' }[w.name] || w.name}`])), cols);
         }
         return miniGrid(a.pools.map(p => [groupShort(p.name), p]), Math.min(2, a.pools.length));
     }

@@ -188,6 +188,15 @@ button {
     text-overflow: ellipsis;
 }
 
+/* Narrow sidebar: "Claude 5-hour" becomes "Claude 5h" instead of being cut off. */
+.mini { container-type: inline-size; }
+.mini-k .ls { display: none; }
+
+@container (max-width: 172px) {
+    .mini-k .lf:has(+ .ls) { display: none; }
+    .mini-k .ls { display: inline; }
+}
+
 .mini-v {
     flex-shrink: 0;
     font-weight: 600;

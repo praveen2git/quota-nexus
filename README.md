@@ -9,17 +9,19 @@ See how much AI quota you have left, when it resets and when you will run out, f
 
 > **Unofficial.** Not affiliated with, endorsed by or sponsored by Google, Anthropic or OpenAI. "Antigravity", "Gemini", "Claude" and "Codex" are trademarks of their owners.
 
-**Hover details:** quota pools and limits, with used and left side by side, reset times and a run-out forecast.
+**Hover details:** 5-hour and weekly limits for every tool, with used and left side by side, reset times and a run-out forecast.
 
-![Hover showing Antigravity pools and Claude Code 5-hour and weekly limits](images/hover.png)
+![Hover showing Antigravity 5-hour and weekly limits for Gemini and Claude, and Claude Code limits with a run-out forecast](images/hover-limits.png)
 
 **Context window:** how full each active session is.
 
-![Hover showing the Claude Code context window: tokens used, from cache and left](images/context.png)
+![Hover showing the Claude Code context window: tokens used, from cache and left](images/context-window.png)
 
-**Dashboard**
+**Dashboard:** one row per limit with a pace marker when a card is open, a compact two-column view when it is collapsed.
 
-![Quota Nexus dashboard with Antigravity pools and models, Claude Code limits with charts, and an idle Codex card](images/dashboard.png)
+![Open dashboard: Antigravity 5-hour and weekly limits for Gemini and Claude models, Claude Code limits and context, an idle Codex card](images/dashboard-open.png)
+
+![Collapsed dashboard: every limit in a two-column grid with small bars, plus another saved Antigravity account](images/dashboard-collapsed.png)
 
 **Settings in the dashboard:** click the gear for every switch, grouped by tool.
 
@@ -32,13 +34,13 @@ See how much AI quota you have left, when it resets and when you will run out, f
 
 ## Features
 
-- **One status bar for three tools.** For example: `Antigravity: Gemini 0% · Claude / GPT-OSS 78% used | Claude Code: 3% · wk 76% used | Codex: 34% used`. It turns yellow, then red, as anything runs low.
+- **One status bar for three tools.** For example: `Antigravity: Gemini 0% · Claude 47% used | Claude Code: 43% · wk 24% used | Codex: 34% used`. It turns yellow, then red, as anything runs low.
 - **Used or left, your choice.** Numbers show what is used by default, like the Claude Code and Codex screens. Set **Percent Mode** to `left` to count down instead. The hover and dashboard always show both, for example `57% (43% left)`. Short formats mark each number with ↑ (used) or ↓ (left).
 - **Run-out forecast.** Nexus tracks your burn rate and tells you "At this pace it runs out in 2h 10m (3:40 PM)" or "lasts until the reset".
-- **24-hour history.** A small chart per quota shows how fast you used it.
+- **Pace marker.** A tick on each bar shows how much of the time window has passed, so you can tell if you are using a limit faster than it resets.
 - **Smart alerts.** You get a notification at 20% and 5% left (you can change the levels), and another when a quota resets. When one Antigravity pool is low, it suggests a pool that still has room. Snooze alerts for an hour with one click.
 - **Context window meter.** Shows how full the active Antigravity conversation, Claude Code session or Codex session is, with a `/compact` tip when it gets full.
-- **Real quota pools.** Antigravity models that share a quota are grouped, and each pool lists its models.
+- **Antigravity 5-hour and weekly limits.** The same numbers as Antigravity's **View Usage**, for each model group (Gemini, Claude). If agy does not report them, models that share a quota are grouped into pools instead.
 - **Several Antigravity accounts.** Nexus remembers each account you sign in with, shows its last-seen quota and when it resets, and lets you label it (Work, Personal).
 - **Diagnostics.** If something isn't detected, **Quota Nexus: Show Diagnostics** tells you why.
 - **Privacy first.** Emails are masked by default and hidden from the status bar.
@@ -65,7 +67,7 @@ Codex writes its rate limits into its logs each time it runs. Nexus shows them "
 - No telemetry, analytics or third-party servers.
 - Stored data (in VS Code's extension storage only):
   - each Antigravity account's email, display name, label, plan and last-seen quota;
-  - 7 days of quota percentages for the charts;
+  - 7 days of quota percentages for the forecasts;
   - the last Claude Code limits (percentages and reset times only), so other windows and reloads reuse them instead of asking again.
 - Claude Code limits are off by default. When you turn them on, the token is read-only and is never refreshed or rewritten.
 - Diagnostics never log tokens or full email addresses.
