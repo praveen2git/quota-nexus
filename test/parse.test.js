@@ -68,8 +68,8 @@ test('parseProcessLines finds agy and language server with ports', () => {
         '9000 C:\\Users\\x\\bin\\agy.exe --hub'
     ].join('\r\n');
     assert.deepStrictEqual(p.parseProcessLines(text), [
-        { pid: 5876, csrf: 'abc-123', ports: [61866] },
-        { pid: 7000, csrf: 'def', ports: [5555] }
+        { pid: 5876, csrf: 'abc-123', ports: [61866], started: 0 },
+        { pid: 7000, csrf: 'def', ports: [5555], started: 0 }
     ]);
 });
 
@@ -110,4 +110,20 @@ test('parseGeneratorMetadata maps model id to label and computes fill', () => {
     assert.strictEqual(p.parseGeneratorMetadata(meta('gemini-3.8-flash-n'), labels, null).model, 'Gemini 3.8 Flash');
     assert.strictEqual(p.parseGeneratorMetadata(meta('gemini-9-ultra'), labels, null).model, 'Gemini 9 Ultra');
     assert.strictEqual(p.parseGeneratorMetadata(meta('MODEL_PLACEHOLDER_M9'), labels, null).model, 'Unknown model');
+});
+
+test('process start times are read on Windows and Unix, and the newest server wins', () => {
+    const { parseProcessLines, newestFirst, etimeMs } = require('../src/parse');
+    const now = 1_800_000_000_000;
+    const win = parseProcessLines([
+        '19764 1792046589000 C:/Users/u/.gemini/bin/agy.exe --hub --hub-port=63541 --csrf_token=aaaa',
+        '24020 1792049994000 C:/Users/u/.gemini/bin/agy.exe --hub --hub-port=64000 --csrf_token=bbbb',
+        '555 C:/Users/u/.gemini/bin/agy.exe --csrf_token=cccc'
+    ].join('\r\n'), now);
+    assert.deepStrictEqual(win.map(p => [p.pid, p.started]), [[19764, 1792046589000], [24020, 1792049994000], [555, 0]]);
+    assert.deepStrictEqual(newestFirst(win).map(p => p.pid), [24020, 19764, 555], 'newest first, no start time last');
+    const unix = parseProcessLines('  812  01:02:03 /home/u/.gemini/bin/agy --hub --csrf_token=dddd\n 900 1-00:00:05 /home/u/.gemini/bin/agy --csrf_token=eeee', now);
+    assert.deepStrictEqual(unix.map(p => [p.pid, now - p.started]), [[812, 3723e3], [900, 86405e3]]);
+    assert.strictEqual(etimeMs('05:09'), 309e3);
+    assert.strictEqual(etimeMs('garbage'), null);
 });

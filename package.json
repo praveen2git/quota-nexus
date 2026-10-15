@@ -2,7 +2,7 @@
   "name": "quota-nexus",
   "displayName": "Quota Nexus - AI Usage & Context Monitor",
   "description": "Unofficial AI usage monitor for Antigravity, Claude Code and Codex: quota, rate limits, token usage, reset times and context window in your status bar. Alerts, forecasts and history. Local-first, stores no sign-in tokens.",
-  "version": "1.2.6",
+  "version": "1.2.7",
   "publisher": "quota-nexus",
   "license": "MIT",
   "engines": {

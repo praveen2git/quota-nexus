@@ -4,12 +4,13 @@ const http = require('http');
 const { execFile } = require('child_process');
 const {
     parseUserStatus, parseProcessLines, parseNetstatListening, parseLsofListening,
-    pickTrajectory, parseGeneratorMetadata, orderPorts
+    pickTrajectory, parseGeneratorMetadata, orderPorts, newestFirst
 } = require('./parse');
 
 const META = { metadata: { ideName: 'antigravity', extensionName: 'antigravity', locale: 'en' } };
 const RPC_PATH = '/exa.language_server_pb.LanguageServerService/';
 const DISCOVERY_BACKOFF_MS = 20000;
+const REDISCOVER_MS = 5 * 60000;
 const MAX_BODY_BYTES = 5 * 1024 * 1024;
 const IS_WIN = process.platform === 'win32';
 
@@ -57,10 +58,10 @@ function rpc(port, csrf, name, body, timeout = 4000) {
 async function listProcesses() {
     if (IS_WIN) {
         const ps = "Get-CimInstance Win32_Process -Filter \"Name LIKE 'agy%' OR Name LIKE 'language_server%'\" | " +
-            "ForEach-Object { [string]$_.ProcessId + ' ' + $_.CommandLine }";
+            "ForEach-Object { [string]$_.ProcessId + ' ' + [string]([DateTimeOffset]$_.CreationDate).ToUnixTimeMilliseconds() + ' ' + $_.CommandLine }";
         return parseProcessLines(await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps]));
     }
-    return parseProcessLines(await run('ps', ['-A', '-ww', '-o', 'pid=,args=']));
+    return parseProcessLines(await run('ps', ['-A', '-ww', '-o', 'pid=,etime=,args=']));
 }
 
 async function listeningPorts(pid, netstatCache) {
@@ -91,6 +92,8 @@ class AgyClient {
         this.discovering = null;
         this.lastFailedDiscovery = 0;
         this.ctxCache = null;
+        this.others = [];
+        this.lastDiscoveryAt = 0;
         this.diag = { lastOkAt: 0, lastError: '', processes: 0, probed: 0, lastDiscoveryAt: 0 };
     }
 
@@ -99,9 +102,21 @@ class AgyClient {
         this.diag.lastError = msg;
     }
 
-    probe(port, csrf, pid) {
+    probe(port, csrf, pid, started) {
         return rpc(port, csrf, 'GetUserStatus', META, 2500)
-            .then(data => (data && data.userStatus ? { port, csrf, pid, data } : null));
+            .then(data => (data && data.userStatus ? { port, csrf, pid, started, data } : null), () => null);
+    }
+
+    // Other live agy servers (often a different account); read once, then cleared.
+    takeOthers() {
+        const o = this.others;
+        this.others = [];
+        return o;
+    }
+
+    rediscoverSoon() {
+        this.lastDiscoveryAt = 0;
+        this.lastFailedDiscovery = 0;
     }
 
     discover() {
@@ -111,19 +126,24 @@ class AgyClient {
             const procs = await listProcesses();
             const netstatCache = {};
             const plans = await Promise.all(procs.map(async p => ({ p, ...orderPorts(p.ports, await listeningPorts(p.pid, netstatCache)) })));
-            const probes = [];
-            for (const { p, ports, verified } of plans) {
+            // One answer per process (its first port that replies), then the newest process wins.
+            const perProc = plans.map(({ p, ports, verified }) => {
                 if (!verified) this.log.info(`Antigravity: could not verify ports of pid ${p.pid}; using its command-line ports only`);
-                for (const port of ports) probes.push(this.probe(port, p.csrf, p.pid));
-            }
-            const probed = probes.length;
-            const found = await firstOk(probes);
+                return firstOk(ports.map(port => this.probe(port, p.csrf, p.pid, p.started)));
+            });
+            const probed = plans.reduce((n, x) => n + x.ports.length, 0);
+            const all = newestFirst((await Promise.all(perProc)).filter(Boolean));
+            const found = all[0] || null;
             this.diag.processes = procs.length;
             this.diag.probed = probed;
+            this.diag.servers = all.length;
             this.diag.lastDiscoveryAt = Date.now();
+            this.lastDiscoveryAt = Date.now();
             if (found) {
+                const changed = !this.server || this.server.pid !== found.pid;
                 this.server = { port: found.port, csrf: found.csrf, pid: found.pid };
-                this.log.info(`Antigravity: connected to pid ${found.pid} on port ${found.port}`);
+                this.others = all.slice(1).map(f => parseUserStatus(f.data)).filter(Boolean);
+                if (changed) this.log.info(`Antigravity: connected to pid ${found.pid} on port ${found.port}${all.length > 1 ? ` (newest of ${all.length} servers)` : ''}`);
             } else {
                 this.lastFailedDiscovery = Date.now();
                 this.fail(procs.length ? `found ${procs.length} process(es) but no port answered` : 'no agy or language server process found');
@@ -135,7 +155,12 @@ class AgyClient {
 
     async getStatus() {
         let data = null;
-        if (this.server) {
+        // Re-scan now and then: a newer agy session may be signed in to another account.
+        if (this.server && Date.now() - this.lastDiscoveryAt > REDISCOVER_MS) {
+            const found = await this.discover();
+            if (found) data = found.data;
+        }
+        if (!data && this.server) {
             try {
                 data = await rpc(this.server.port, this.server.csrf, 'GetUserStatus', META);
             } catch (e) {

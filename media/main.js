@@ -73,6 +73,10 @@
         return h('span', { class: 'row-pct' }, pctText(x), h('span', { class: 'muted' }, ` (${x[o]}% ${o})`));
     }
 
+    function resetsText(x) {
+        return x.countdown === 'now' ? `Resets now (${x.wall})` : `Resets in ${x.countdown} (${x.wall})`;
+    }
+
     function resetPassedText() {
         return `Reset time has passed - likely back to ${mode() === 'used' ? '0% used' : '100% left'}`;
     }
@@ -90,7 +94,7 @@
         let reset;
         if (p.estimated) reset = resetPassedText();
         else if (p.pct >= 100) reset = 'Nothing used yet';
-        else if (p.countdown) reset = `Resets in ${p.countdown} (${p.wall})`;
+        else if (p.countdown) reset = resetsText(p);
         return h('div', { class: 'row' },
             h('div', { class: 'row-head' },
                 h('span', { class: 'row-name' }, p.name),
@@ -105,7 +109,7 @@
         let reset = '';
         if (w.estimated) reset = resetPassedText();
         else if (w.left >= 100) reset = 'Nothing used yet';
-        else if (w.countdown) reset = `Resets in ${w.countdown} (${w.wall})`;
+        else if (w.countdown) reset = resetsText(w);
         return h('div', { class: 'row' },
             h('div', { class: 'row-head' },
                 h('span', { class: 'row-name' }, `${w.name} limit`),

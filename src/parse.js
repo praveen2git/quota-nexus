@@ -117,19 +117,34 @@ function parseUserStatus(raw) {
 }
 
 // One "pid commandline" per line; keeps processes that carry a csrf token.
-function parseProcessLines(text) {
+// ps etime: [[dd-]hh:]mm:ss
+function etimeMs(s) {
+    const m = /^(?:(\d+)-)?(?:(\d+):)?(\d+):(\d+)$/.exec(s || '');
+    if (!m) return null;
+    return ((+(m[1] || 0) * 24 + +(m[2] || 0)) * 3600 + +m[3] * 60 + +m[4]) * 1000;
+}
+
+// Lines are "pid [start] command": start is epoch ms (Windows) or ps etime (macOS/Linux).
+function parseProcessLines(text, now = Date.now()) {
     const out = [];
     for (const line of String(text || '').split(/\r?\n/)) {
-        const m = line.trim().match(/^(\d+)\s+(.+)$/);
+        const m = line.trim().match(/^(\d+)\s+(?:(\d{12,14}|(?:\d+-)?(?:\d+:)?\d+:\d+)\s+)?(.+)$/);
         if (!m) continue;
-        const cmd = m[2];
+        const cmd = m[3];
         if (!/(^|[\\/\s"])agy(\.exe)?["\s]|language_server/i.test(cmd + ' ')) continue;
         const csrf = cmd.match(/--csrf_token[=\s]+["']?([^\s"']+)/);
         if (!csrf) continue;
         const ports = [...cmd.matchAll(/--[a-z_-]*port[=\s]+(\d+)/gi)].map(x => parseInt(x[1], 10));
-        out.push({ pid: parseInt(m[1], 10), csrf: csrf[1], ports: [...new Set(ports)] });
+        const age = m[2] && m[2].includes(':') ? etimeMs(m[2]) : null;
+        const started = m[2] ? (age === null ? Number(m[2]) : now - age) : 0;
+        out.push({ pid: parseInt(m[1], 10), csrf: csrf[1], ports: [...new Set(ports)], started });
     }
     return out;
+}
+
+// Newest server first: after a switch the old agy hub can linger, still signed in to the old account.
+function newestFirst(found) {
+    return [...found].sort((a, b) => (b.started || 0) - (a.started || 0) || b.pid - a.pid);
 }
 
 function parseNetstatListening(text, pid) {
@@ -220,5 +235,5 @@ function parseGeneratorMetadata(data, modelLabels, picked) {
 
 module.exports = {
     parseUserStatus, parseProcessLines, parseNetstatListening, parseLsofListening,
-    pickTrajectory, parseGeneratorMetadata, familyOf, orderPorts
+    pickTrajectory, parseGeneratorMetadata, familyOf, orderPorts, newestFirst, etimeMs
 };

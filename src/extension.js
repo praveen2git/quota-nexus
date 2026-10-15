@@ -27,6 +27,13 @@ const FOCUS_REFRESH_MS = 60000;
 const AG_WATCH_MS = 5000;
 const AG_STATUS_MS = 30000;
 const TICK_MS = 60000;
+const SIGNIN_START_MS = 3500;
+const SIGNIN_STEP_MS = 1500;
+const SIGNIN_RESCAN_MS = 8000;
+// Google OAuth authorization codes look like "4/0A..."; anything else is not pasted.
+const AUTH_CODE_RE = /^4\/[\w-]{20,512}$/;
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 class Nexus {
     constructor(context) {
@@ -176,6 +183,9 @@ class Nexus {
                 this.agStatusAt = Date.now();
                 if (s) {
                     this.onStatus(s);
+                    for (const o of this.agy.takeOthers()) {
+                        if (o.email.toLowerCase() !== s.email.toLowerCase()) this.accounts.recordActive(o);
+                    }
                     this.agContext = ctx;
                 } else {
                     this.connected = false;
@@ -413,23 +423,62 @@ class Nexus {
         return fs.existsSync(p) ? p : null;
     }
 
-    // Quota Nexus never stores or moves sign-in tokens; switching uses Antigravity's own sign-in.
+    // Quota Nexus never stores or moves sign-in tokens; switching drives Antigravity's own sign-in.
     async guidedSignIn(targetEmail) {
         const who = targetEmail ? maskEmail(targetEmail, cfg.get('privacy.maskEmails', true)) : 'another Google account';
         const agy = this.agyPath();
-        const detail = [
-            `Sign out of Antigravity, then sign in again as ${who}.`,
+        const detail = agy ? [
+            'Quota Nexus opens agy, signs it out and starts Google sign-in for you. Then:',
             '',
-            'agy CLI: type /logout in an agy session, then follow the sign-in prompt.',
-            'Antigravity IDE: use the account menu in the IDE.',
+            `1. In the browser, pick ${who} and click Continue.`,
+            '2. Copy the code Google shows.',
+            '3. Click "Paste Code" in VS Code (or paste it in the agy terminal).',
             '',
-            'Quota Nexus picks up the new account automatically.'
-        ].join('\n');
-        const pick = await vscode.window.showInformationMessage(`Switch to ${who}`, { modal: true, detail }, ...(agy ? ['Open agy Terminal'] : []));
-        if (pick === 'Open agy Terminal') {
-            const t = vscode.window.createTerminal({ name: 'Antigravity sign-in', shellPath: agy });
-            t.show();
+            'Antigravity IDE users: use the account menu in the IDE instead.'
+        ].join('\n') : 'agy CLI not found in ~/.gemini/bin. In the Antigravity IDE, use its account menu to sign in as the other account. Quota Nexus picks it up automatically.';
+        const pick = await vscode.window.showInformationMessage(`Switch to ${who}`, { modal: true, detail }, ...(agy ? ['Sign Out and Switch'] : []));
+        if (pick !== 'Sign Out and Switch') return;
+        // agy has no ready signal, so keys are paced. Sign out in one session, then a fresh one opens its sign-in menu.
+        if (this.connected) {
+            const out = await this.agyTerminal(agy, 'Antigravity sign-out');
+            out.sendText('/logout', false);
+            await sleep(400);
+            out.sendText('\r', false);
+            await sleep(SIGNIN_STEP_MS);
+            out.sendText('\r', false);
+            await sleep(SIGNIN_STEP_MS);
+            out.dispose();
         }
+        const t = await this.agyTerminal(agy, 'Antigravity sign-in');
+        t.sendText('\r', false);
+        this.offerCodePaste(t);
+    }
+
+    async agyTerminal(agy, name) {
+        const t = vscode.window.createTerminal({ name, shellPath: agy });
+        t.show();
+        await t.processId;
+        await sleep(SIGNIN_START_MS);
+        return t;
+    }
+
+    // The code goes straight from the clipboard into agy's own prompt; it is never stored or logged.
+    async offerCodePaste(t) {
+        const pick = await vscode.window.showInformationMessage(
+            'Pick your account in the browser, click Continue, then copy the code Google shows.', 'Paste Code', 'Cancel');
+        if (pick !== 'Paste Code') return;
+        const code = (await vscode.env.clipboard.readText()).trim();
+        if (!AUTH_CODE_RE.test(code)) {
+            const again = await vscode.window.showWarningMessage('The clipboard does not hold a Google sign-in code. Copy the code from the browser page and try again.', 'Paste Code');
+            if (again === 'Paste Code') return this.offerCodePaste(t);
+            return;
+        }
+        t.show();
+        t.sendText(code, false);
+        await sleep(200);
+        t.sendText('\r', false);
+        // The new sign-in may come up as a new agy server; look again once it has started.
+        setTimeout(() => { this.agy.rediscoverSoon(); this.refresh(); }, SIGNIN_RESCAN_MS);
     }
 
     showDiagnostics() {

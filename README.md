@@ -72,12 +72,13 @@ Codex writes its rate limits into its logs each time it runs. Nexus shows them "
 
 ## Switching Antigravity accounts
 
-Quota Nexus does not switch accounts by itself. Run **Quota Nexus: Switch Antigravity Account** and pick an account:
+Quota Nexus switches through Antigravity's own sign-in, so it never touches your sign-in tokens. Run **Quota Nexus: Switch Antigravity Account**, pick an account and click **Sign Out and Switch**:
 
-1. Click **Open agy Terminal** (CLI users), type `/logout`, and sign in with the other account.
-2. Antigravity IDE users can use the IDE's account menu instead.
+1. Quota Nexus opens agy, signs it out and starts Google sign-in for you.
+2. In the browser, pick the account and click **Continue**.
+3. Copy the code Google shows, then click **Paste Code** in VS Code.
 
-Nexus detects the new account within one refresh.
+Nexus detects the new account within seconds and remembers it, so the dashboard shows each account's last quota. Antigravity IDE users can use the IDE's account menu instead.
 
 ## Commands
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.2.7] - 2026-10-15
+
+### Changed
+- **Easier account switching.** "Sign Out and Switch" runs `/logout` in agy, then opens a fresh agy on its sign-in menu and starts Google sign-in for you. After you pick the account in the browser, **Paste Code** sends Google's code from the clipboard straight to agy. Only text shaped like a Google sign-in code is pasted, and it is never stored or logged. Quota Nexus still never reads, stores or moves sign-in tokens.
+
+### Fixed
+- "Resets now" instead of "Resets in now" when a reset time has just passed.
+- **The dashboard follows the account you switched to.** After a switch, the old agy server can keep running, still signed in to the old account, and Quota Nexus kept reading it. It now uses the newest agy server, looks again after a sign-in and every 5 minutes, and shows accounts on other running agy servers as "Other Antigravity accounts" with their live quota.
+
 ## [1.2.6] - 2026-10-15
 
 ### Fixed
